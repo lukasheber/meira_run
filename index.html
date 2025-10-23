@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Meira Run - Protótipo Perspectiva</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #1a1a1a; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #game-container { border: 3px solid #444; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); overflow: hidden; aspect-ratio: 9 / 16; width: 90vmin; max-width: 450px; height: auto; max-height: 800px; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #instructions { margin-top: 15px; font-size: 1.2rem; text-align: center; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <script>
+        // --- CONFIGURAÇÕES DO JOGO (Sem alteração) ---
+        const CONFIG = {
+            player: { y_position: 0.85, speed_base: 280, scrap_speed_bonus: 12, box_multiplier_bonus: 1.5, lane_change_speed: 250, box_speed_penalty_step: 0.20, box_speed_penalty_min: 0.35},
+            meira: { event_duration: 20000, event_trigger_count: 5, fire_rate: 750, kiss_speed: 420, },
+            spawns: { scrap_interval: [500, 900], box_interval: [3500, 5000], obstacle_interval: [2000, 3500], powerup_interval: [7000, 10000], powerup_chance: 0.15 },
+            scoring: { scrap: 10, box: 30, powerup: 50 },
+            powerups: { bike_duration: 10000, bike_color: 0x00ffff },
+            world: { width: 450, height: 800, vanishing_point_y: 0.4, road_width_top: 0.2, road_width_bottom: 0.8, }
+        };
+
+        // --- CENA PRINCIPAL DO JOGO ---
+        class GameScene extends Phaser.Scene {
+            constructor() { super('GameScene'); }
+
+            preload() {
+                // ... (preload idêntico, sem mudanças) ...
+                this.load.spritesheet('player_run', 'assets/images/player_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
+                this.load.image('velhinhos', 'assets/images/velhinhos.png');
+                this.load.image('taa', 'assets/images/taa.png');
+                this.load.image('tv', 'assets/images/tv.png');
+                this.load.image('coco', 'assets/images/coco.png');
+                this.load.image('lata', 'assets/images/lata.png');
+                this.load.image('bike', 'assets/images/bike.png');
+                this.load.spritesheet('bike_run', 'assets/images/bike_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
+                this.load.image('meira', 'assets/images/meira.png');
+                this.load.image('coracao', 'assets/images/coracao.png');
+                this.load.image('box', 'assets/images/box.png');
+                this.load.spritesheet('meira_attack', 'assets/images/meira_attk.png', { frameWidth: 128, frameHeight: 128 });
+                this.load.audio('theme_music', 'assets/audio/tema.ogg');
+                this.load.audio('catch_box_sfx', 'assets/audio/catch_box.ogg');
+                this.load.audio('catch_scrap_sfx', 'assets/audio/catch_scrap_sfx.ogg');
+                this.load.audio('bike_run_sfx', 'assets/audio/bike_run.ogg');
+            }
+
+            // --- FUNÇÕES DE PERSPECTIVA (sem mudança) ---
+            getPerspective(y) { /* ... */ const vpY = CONFIG.world.height * CONFIG.world.vanishing_point_y; const roadHeight = CONFIG.world.height - vpY; const progress = Phaser.Math.Clamp((y - vpY) / roadHeight, 0, 1.2); const roadWidth = Phaser.Math.Linear( CONFIG.world.width * CONFIG.world.road_width_top, CONFIG.world.width * CONFIG.world.road_width_bottom, progress ); const scale = progress; return { progress, roadWidth, scale }; }
+            getLaneX(laneIndex, y) { /* ... */ const { roadWidth } = this.getPerspective(y); const roadStartX = (CONFIG.world.width - roadWidth) / 2; const laneWidth = roadWidth / 3; return roadStartX + (laneWidth * (laneIndex + 0.5)); }
+            updateObjectPerspective(obj) { /* ... */ if (!obj || !obj.body) return; const { scale } = this.getPerspective(obj.y); obj.setScale(scale * (obj.baseScale || 1.0)); if (obj.isLaneDivider) { obj.scaleX = (obj.baseScale || 1.0) * scale * 0.5; } if (typeof obj.laneIndex === 'number') { obj.setX(this.getLaneX(obj.laneIndex, obj.y)); } }
+
+
+            create() {
+                // --- Inicialização de Variáveis ---
+                this.gameState = 'NORMAL_RUN'; this.isGameOver = false; this.score = 0; this.boxCount = 0; this.scoreMultiplier = 1; this.scrapBonusSpeed = 0; this.lastEventTriggerCount = 0;
+                this.playerY = CONFIG.world.height * CONFIG.player.y_position; 
+                this.isBikeActive = false; this.bikeTimer = null;
+                this.DIVIDER_SPACING = 50; this.distanceToNextDivider = this.DIVIDER_SPACING;
+                const vpY = CONFIG.world.height * CONFIG.world.vanishing_point_y;
+                
+                this.cocoCount = 0; // Contador para cocôs
+                this.lataCount = 0; // Contador para latas
+                this.tvCount = 0;
+
+                this.currentSpeed = CONFIG.player.speed_base;
+                this.targetSpeed = CONFIG.player.speed_base;
+
+                // --- Setup da Pista Fatiada ---
+                this.roadGraphics = this.add.graphics().setDepth(-10);
+                this.roadColor = 0xAAAAAA; this.skyColor = 0x2c3e50; this.grassColor = 0x000000;
+                this.roadSlices = [];
+                for (let y = Math.floor(vpY); y < CONFIG.world.height; y++) {
+                    const { roadWidth } = this.getPerspective(y);
+                    this.roadSlices.push({ y: y, x: (CONFIG.world.width - roadWidth) / 2, width: roadWidth });
+                }
+
+                // Criar Textura para a Faixa Amarela
+                let tempGraphics = this.add.graphics();
+                tempGraphics.fillStyle(0xffff00, 1); 
+                tempGraphics.fillRect(0, 0, 8, 30); 
+                tempGraphics.generateTexture('divider_texture', 8, 30); 
+                tempGraphics.destroy(); 
+                
+                // --- Setup dos Personagens ---
+                this.currentLane = 1;
+                // *** MUDANÇA: Jogador criado SEM setDepth inicial explícito ***
+                // (Ele pegará o depth padrão 0, mas será ajustado no update)
+                this.player = this.physics.add.sprite(this.getLaneX(1, this.playerY), this.playerY, 'player_run').setOrigin(0.5, 1);
+                this.anims.create({ key: 'run', frames: this.anims.generateFrameNumbers('player_run', { start: 0, end: 2 }), frameRate: 5, repeat: -1 });
+                this.anims.create({ key: 'bike_run', frames: this.anims.generateFrameNumbers('bike_run', { start: 0, end: 2 }), frameRate: 10, repeat: -1 });
+                this.player.anims.play('run', true);
+                this.player.body.setSize(32, 32); this.player.body.setOffset(16, 32);
+                this.player.baseScale = 1.0; this.player.laneIndex = 1;
+                this.updateObjectPerspective(this.player);
+                this.meira = this.physics.add.sprite(this.getLaneX(1, vpY), vpY - 50, 'meira').setOrigin(0.5).setDepth(100);
+                this.anims.create({ key: 'meira_kiss_anim', frames: this.anims.generateFrameNumbers('meira_attack', { start: 0, end: 5 }), frameRate: 10, repeat: 0 });
+
+                // --- Grupos de Física ---
+                // *** MUDANÇA: Configuração sem 'setDepth' padrão ***
+                // O depth será definido dinamicamente no update para obstáculos
+                // e fixo para outros
+                const groupConfigNoDepth = { allowGravity: false }; 
+                const groupConfigDepth1 = { allowGravity: false, setDepth: 1 }; // Faixas
+                const groupConfigDepth2 = { allowGravity: false, setDepth: 2 }; // Coletáveis e Beijos
+
+                this.scraps = this.physics.add.group(groupConfigDepth2);
+                this.boxes = this.physics.add.group(groupConfigDepth2);
+                this.obstacles = this.physics.add.group(groupConfigNoDepth); // Obstáculos terão depth dinâmico
+                this.kisses = this.physics.add.group(groupConfigDepth2);
+                this.powerups = this.physics.add.group(groupConfigDepth2);
+                this.laneDividers = this.physics.add.group(groupConfigDepth1); // Faixas ficam abaixo (depth 1)
+
+                // --- Colisões (Overlap com callback - sem mudança) ---
+                this.physics.add.overlap(this.player, this.scraps, this.collectScrap, null, this);
+                this.physics.add.overlap(this.player, this.boxes, this.collectBox, null, this);
+                this.physics.add.overlap(this.player, this.powerups, this.collectPowerup, null, this);
+                this.physics.add.overlap(this.player, this.obstacles, this.checkObstacleCollision, null, this);
+                this.physics.add.overlap(this.player, this.kisses, this.checkKissCollision, null, this);
+
+                // --- Controles e HUD (Sem alteração, depth alto) ---
+                this.input.on('pointerdown', this.handleInput, this);
+                this.scoreText = this.add.text(16, 16, 'Pontos: 0', { fontSize: '24px', fill: '#fff' }).setDepth(200);
+                this.boxText = this.add.text(16, 50, 'Caixas: 0 (x1.0)', { fontSize: '24px', fill: '#fff' }).setDepth(200);
+                this.powerupText = this.add.text(16, 84, '', { fontSize: '20px', fill: CONFIG.powerups.bike_color }).setDepth(200);
+                this.eventText = this.add.text(CONFIG.world.width / 2, 40, '', { fontSize: '32px', fill: '#ff0000', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(200);
+
+                // --- Timers de Spawn (Sem alteração) ---
+                this.scrapTimer = this.time.addEvent({ delay: Phaser.Math.Between(CONFIG.spawns.scrap_interval[0], CONFIG.spawns.scrap_interval[1]), callback: this.spawnScrap, callbackScope: this, loop: true });
+                this.boxTimer = this.time.addEvent({ delay: Phaser.Math.Between(CONFIG.spawns.box_interval[0], CONFIG.spawns.box_interval[1]), callback: this.spawnBox, callbackScope: this, loop: true });
+                this.obstacleTimer = this.time.addEvent({ delay: Phaser.Math.Between(CONFIG.spawns.obstacle_interval[0], CONFIG.spawns.obstacle_interval[1]), callback: this.spawnObstacle, callbackScope: this, loop: true });
+                this.powerupTimer = this.time.addEvent({ delay: Phaser.Math.Between(CONFIG.spawns.powerup_interval[0], CONFIG.spawns.powerup_interval[1]), callback: this.spawnPowerup, callbackScope: this, loop: true });
+                
+                if (!this.sound.get('theme_music') || !this.sound.get('theme_music').isPlaying) {
+                     this.music = this.sound.add('theme_music', { 
+                         loop: true,  // <-- Garante que a música toque em loop
+                         volume: 0.5 // <-- Ajuste o volume (0 a 1)
+                     });
+                     this.music.play();
+                }
+            
+            }
+
+            // --- FUNÇÃO DE DESENHO (drawRoadSlices) - (Simplificada e Corrigida) ---
+            drawRoadSlices() {
+                this.roadGraphics.clear();
+                const vpY = CONFIG.world.height * CONFIG.world.vanishing_point_y;
+                this.roadGraphics.fillStyle(this.skyColor);
+                this.roadGraphics.fillRect(0, 0, CONFIG.world.width, vpY);
+                this.roadGraphics.fillStyle(this.grassColor);
+                this.roadGraphics.fillRect(0, vpY, CONFIG.world.width, CONFIG.world.height - vpY); // Corrigido
+                for (const slice of this.roadSlices) {
+                    this.roadGraphics.fillStyle(this.roadColor);
+                    this.roadGraphics.fillRect(slice.x, slice.y, slice.width, 1);
+                }
+            }
+
+
+update(time, delta) {
+                if (this.isGameOver) return;
+
+                // --- NOVA LÓGICA DE VELOCIDADE ---
+                const baseSpeed = CONFIG.player.speed_base + this.scrapBonusSpeed;
+                const penalidade = Math.max(CONFIG.player.box_speed_penalty_min, 1 - this.boxCount * CONFIG.player.box_speed_penalty_step);
+                const desiredSpeed = this.isBikeActive ? baseSpeed : baseSpeed * penalidade;
+                this.targetSpeed = desiredSpeed;
+                
+                // --- AJUSTE: Aumentar fator de interpolação ---
+                this.currentSpeed = Phaser.Math.Linear(this.currentSpeed, this.targetSpeed, 0.35); // Aumentado para 0.35 (mais rápido)
+                // ---------------------------------------------
+                
+                const speedForFrame = this.currentSpeed * (delta / 1000);
+
+                // --- ADICIONE ESTE LOG ---
+                // console.log(`Caixas: ${this.boxCount}, Sucata: ${this.scrapBonusSpeed.toFixed(0)}, Penalidade: ${penalidade.toFixed(2)}, VelAlvo: ${this.targetSpeed.toFixed(0)}, VelAtual: ${this.currentSpeed.toFixed(0)}`);
+                // -------------------------
+
+                // --- Resto do update (sem mudanças) ---
+                this.roadPosition = (this.roadPosition + speedForFrame) % 1000000;
+                this.drawRoadSlices();
+                this.distanceToNextDivider -= speedForFrame;
+                if (this.distanceToNextDivider <= 0) { /* ... */ this.spawnLaneDivider(); this.distanceToNextDivider += this.DIVIDER_SPACING; }
+                const perspectiveSpeedMultiplier = 2.0;
+                [this.scraps, this.boxes, this.obstacles, this.kisses, this.powerups, this.laneDividers].forEach(group => { /* ... */ group.getChildren().forEach(item => { if (item && item.active) { const { progress } = this.getPerspective(item.y); item.y += speedForFrame * (progress * perspectiveSpeedMultiplier); this.updateObjectPerspective(item); } }); });
+                if (!this.isGameOver) { /* ... */ this.player.setDepth(this.player.y); this.obstacles.getChildren().forEach(obstacle => { if (obstacle && obstacle.active) { obstacle.setDepth(obstacle.y); } }); }
+                if (this.gameState === 'MEIRA_EVENT') { /* ... */ this.meira.setX(this.getLaneX(this.player.laneIndex, this.meira.y)); this.eventCountdown -= delta; this.eventText.setText(`ATAQUE! ${Math.ceil(this.eventCountdown / 1000)}s`); if (this.eventCountdown <= 0) this.endMeiraEvent(true); }
+                this.cleanupCollectibles();
+                this.updateHUD();
+            }
+
+            // --- Callbacks de Colisão (Colisão por Pés) - SEM MUDANÇA ---
+            checkObstacleCollision(player, obstacle) {
+                const collisionThreshold = 20; 
+                if (Math.abs(player.y - obstacle.y) < collisionThreshold) {
+                    if (this.isBikeActive) { 
+                        this.removeHighlightEffect(obstacle); // Remove efeito antes de destruir
+                        obstacle.destroy(); 
+                    } 
+                    else { this.gameOver(); }
+                }
+            }
+checkKissCollision(player, kiss) {
+                // Verifica se o jogo já acabou ou se o beijo/jogador não existem mais
+                if (this.isGameOver || !kiss || !kiss.active || !player || !player.active) {
+                    return;
+                }
+
+                const collisionThreshold = 20;
+                if (Math.abs(player.y - kiss.y) < collisionThreshold) {
+                    // Se estiver com a bicicleta, apenas destrói o beijo
+                    if (this.isBikeActive) {
+                        kiss.destroy();
+                        // Opcional: Adicionar som/efeito visual aqui
+                    }
+                    // Se NÃO estiver com a bicicleta...
+                    else {
+                        // Verifica se tem caixas restantes
+                        if (this.boxCount > 0) {
+                            this.boxCount--;       // Remove uma caixa (vida)
+                            this.updateHUD();      // Atualiza o texto na tela
+                            kiss.destroy();        // Destrói o beijo
+                            // --- FEEDBACK DE HIT (Simples: piscar vermelho) ---
+                            player.setTint(0xff0000); // Fica vermelho
+                            this.time.delayedCall(150, () => { // Depois de 150ms
+                                if (!this.isGameOver) { // Só limpa se o jogo não acabou
+                                    player.clearTint(); // Volta ao normal
+                                }
+                            });
+                            // ----------------------------------------------
+                            // Opcional: Adicionar som de "hit" aqui
+                        }
+                        // Se não tiver mais caixas...
+                        else {
+                            this.gameOver(); // Chama o game over normal
+                        }
+                    }
+                }
+            }
+           
+            spawnLaneDivider() {
+                const positions = [0.5, 1.5]; 
+                positions.forEach(pos => {
+                    const spawnY = (CONFIG.world.height * CONFIG.world.vanishing_point_y) + 10;
+                    const divider = this.laneDividers.create(this.getLaneX(pos, spawnY), spawnY, 'divider_texture');
+                    divider.setOrigin(0.5, 1);
+                    divider.isLaneDivider = true;
+                    divider.laneIndex = pos; 
+                    divider.baseScale = 0.8; 
+                    this.updateObjectPerspective(divider);
+                });
+            }
+
+            // --- Restante do código (sem alterações) ---
+            handleInput(pointer) { /* ... */ if (this.isGameOver || this.tweens.isTweening(this.player)) return; this.changeLane(pointer.x < CONFIG.world.width / 2 ? -1 : 1); }
+            changeLane(direction) { /* ... */ const targetLane = Phaser.Math.Clamp(this.currentLane + direction, 0, 2); if (targetLane === this.currentLane) return; this.currentLane = targetLane; this.player.laneIndex = targetLane; this.tweens.add({ targets: this.player, x: this.getLaneX(targetLane, this.playerY), duration: CONFIG.player.lane_change_speed, ease: 'Power2' }); }
+            updateHUD() { /* ... */ this.scoreText.setText(`Pontos: ${this.score}`); this.boxText.setText(`Caixas: ${this.boxCount} (x${this.scoreMultiplier.toFixed(1)})`); }
+            startMeiraEvent() { /* ... */ this.gameState = 'MEIRA_EVENT'; this.lastEventTriggerCount = this.boxCount; this.meira.setY((CONFIG.world.height * CONFIG.world.vanishing_point_y) + 50); this.eventCountdown = CONFIG.meira.event_duration; this.eventText.setVisible(true); this.kissTimer = this.time.addEvent({ delay: CONFIG.meira.fire_rate, callback: this.fireKiss, callbackScope: this, loop: true }); this.boxTimer.paused = true; this.obstacleTimer.paused = true; this.powerupTimer.paused = true; }
+endMeiraEvent(success) {
+                this.gameState = 'NORMAL_RUN';
+                this.eventText.setVisible(false);
+                this.meira.setY(-100);
+                if (this.kissTimer) this.kissTimer.remove();
+                this.meira.anims.stop();
+                this.meira.setTexture('meira');
+
+                // --- MUDANÇA AQUI ---
+                // Reseta o bônus de velocidade SEMPRE que o evento termina
+                this.scrapBonusSpeed = 0; 
+                // -------------------
+
+                // A penalidade das caixas será recalculada automaticamente no próximo update
+                
+                this.boxTimer.paused = false; 
+                this.obstacleTimer.paused = false; 
+                this.powerupTimer.paused = false;
+            }
+            fireKiss() { /* ... */ if (this.gameState !== 'MEIRA_EVENT') return; this.meira.play('meira_kiss_anim', true); const spawnY = this.meira.y + 40; const laneIndex = this.player.laneIndex; const kiss = this.kisses.create(this.getLaneX(laneIndex, spawnY), spawnY, 'coracao'); kiss.body.setVelocityY(CONFIG.meira.kiss_speed); kiss.baseScale = 1; kiss.laneIndex = laneIndex; }
+            spawn(group, key, baseScale, applyHighlight = false) { 
+                const spawnY = (CONFIG.world.height * CONFIG.world.vanishing_point_y) + 10; 
+                const laneIndex = Phaser.Math.Between(0, 2); 
+                const item = group.create(this.getLaneX(laneIndex, spawnY), spawnY, key).setOrigin(0.5, 1); 
+                item.laneIndex = laneIndex; 
+                item.baseScale = baseScale; 
+                this.updateObjectPerspective(item); 
+                if (key === 'velhinhos') { item.body.setSize(70, 30); item.body.setOffset(5, 66); } 
+                else if (key === 'taa') { item.body.setSize(70, 40); item.body.setOffset(5, 88); } 
+                else if (key === 'tv' || key === 'coco' || key === 'lata') { item.body.setSize(28, 28); item.body.setOffset(2, 2); }
+                
+                // --- CHAMADA DO applyHighlightEffect (SEM MUDANÇA) ---
+                if (applyHighlight) {
+                    if (key === 'box') { this.applyHighlightEffect(item, 0x00ff00); } // Verde para caixa
+                    else if (key === 'bike') { this.applyHighlightEffect(item, 0x00ff00); } // Verde para bike
+                }
+             }
+            spawnScrap() { /* ... */ const scrapTypes = ['tv', 'coco', 'lata']; const randomType = Phaser.Math.RND.pick(scrapTypes); this.spawn(this.scraps, randomType, 1.8); }
+            spawnBox() { /* ... */ this.spawn(this.boxes, 'box', 1.0, true); }
+            spawnObstacle() { /* ... */ const obstacleTypes = ['velhinhos', 'taa']; const randomType = Phaser.Math.RND.pick(obstacleTypes); const baseScale = (randomType === 'velhinhos') ? 1.1 : 1.2; this.spawn(this.obstacles, randomType, baseScale); }
+            spawnPowerup() { /* ... */ if (this.isBikeActive) return; if (Phaser.Math.FloatBetween(0, 1) < CONFIG.spawns.powerup_chance) { this.spawn(this.powerups, 'bike', 0.9, true); } }
+            collect(player, item, scoreValue, isBox, isPowerup = false) { /* ... */ if (!item || !item.active) return; this.removeHighlightEffect(item); const itemKey = item.texture.key; // Pega a chave da textura (ex: 'coco', 'lata', 'box')
+                if (itemKey === 'coco') {
+                    this.cocoCount++;
+                } else if (itemKey === 'lata') {
+                    this.lataCount++;
+                }
+                // A contagem de 'box' já acontece no bloco 'if (isBox)' abaixo, então não precisa aqui.
+                  else if (itemKey === 'tv') {
+                     this.tvCount++; // Se você adicionar o contador de TV
+                } item.destroy(); this.score += Math.floor(scoreValue * this.scoreMultiplier); if (isBox) {this.boxCount++; this.scoreMultiplier += CONFIG.player.box_multiplier_bonus; this.sound.play('catch_box_sfx', { volume: 0.7 }); if (this.boxCount >= this.lastEventTriggerCount + CONFIG.meira.event_trigger_count) { this.startMeiraEvent(); } } else if (isPowerup) { this.activateBike(); } else { this.scrapBonusSpeed += CONFIG.player.scrap_speed_bonus; this.sound.play('catch_scrap_sfx', { volume: 0.6 }); } } 
+            collectScrap(player, scrap) { /* ... */ this.collect(player, scrap, CONFIG.scoring.scrap, false); }
+            collectBox(player, box) { /* ... */ this.collect(player, box, CONFIG.scoring.box, true); }
+            collectPowerup(player, powerup) { /* ... */ this.collect(player, powerup, CONFIG.scoring.powerup, false, true); }
+            activateBike() {
+                if (this.isBikeActive) {
+                    // Se já estiver ativa, apenas reinicia o timer (remove o antigo abaixo)
+                    if (this.bikeTimer) this.bikeTimer.remove();
+                } else {
+                     // --- ADICIONE ESTA LINHA: Guarda a escala base original ---
+                    // Só guarda se ainda não tiver guardado (primeira ativação)
+                    if (typeof this.player.originalBaseScale === 'undefined') {
+                         this.player.originalBaseScale = this.player.baseScale;
+                    }
+                    // -----------------------------------------------------
+                }
+
+                this.isBikeActive = true;
+
+                // --- ADICIONE ESTAS LINHAS: Define a nova escala base e atualiza ---
+                this.player.baseScale = this.player.originalBaseScale * 1.5; // Ou o fator que você escolher (ex: 2.0 para dobrar)
+                this.updateObjectPerspective(this.player); // Aplica a mudança de tamanho imediatamente
+                // -----------------------------------------------------------------
+
+                this.player.anims.play('bike_run', true); // Toca a animação da bicicleta
+                
+                if (!this.bikeSound || !this.bikeSound.isPlaying) {
+                    this.bikeSound = this.sound.add('bike_run_sfx', {
+                        loop: true,
+                        volume: 0.4 // Ajuste o volume conforme necessário
+                    });
+                    this.bikeSound.play();
+                }
+
+                this.bikeTimer = this.time.addEvent({
+                    delay: CONFIG.powerups.bike_duration,
+                    callback: this.deactivateBike,
+                    callbackScope: this,
+                    loop: false
+                });
+            }
+           deactivateBike() {
+                if (this.isGameOver || !this.isBikeActive) return; // Adiciona verificação !this.isBikeActive
+
+                this.isBikeActive = false;
+
+                if (this.bikeSound && this.bikeSound.isPlaying) {
+                    this.bikeSound.stop();
+                }
+
+                // --- ADICIONE ESTAS LINHAS: Restaura a escala base original ---
+                if (typeof this.player.originalBaseScale !== 'undefined') {
+                    this.player.baseScale = this.player.originalBaseScale;
+                    this.updateObjectPerspective(this.player); // Aplica a mudança
+                    // Limpa a variável para a próxima vez que pegar a bike
+                    // delete this.player.originalBaseScale; // Opcional, mas limpo
+                }
+                // ----------------------------------------------------------
+
+                this.player.anims.play('run', true); // Volta para a animação de corrida
+                this.powerupText.setText('');
+            }
+            cleanupCollectibles() {
+                [this.scraps, this.boxes, this.obstacles, this.kisses, this.powerups, this.laneDividers].forEach(group => {
+                    group.getChildren().forEach(item => {
+                        if (item && item.y > CONFIG.world.height + 50) {
+                            this.removeHighlightEffect(item); 
+                            item.destroy(); 
+                        }
+                    });
+                });
+            } 
+ gameOver() {
+                // Se o jogo já acabou, não faz nada
+                if (this.isGameOver) return;
+
+                if (this.gameState === 'MEIRA_EVENT') {
+                    this.scrapBonusSpeed = 0;
+                }
+
+                // Define o estado de Game Over e pausa a física
+                this.isGameOver = true;
+                this.physics.pause();
+
+                // Pinta o jogador de vermelho
+                this.player.setTint(0xff0000);
+
+                // =================================================================
+                // --- NOVA LÓGICA: Forçar Profundidade Baixa ---
+                // =================================================================
+                const lowDepth = 0; // Camada de profundidade mais baixa
+
+                // Define a profundidade do jogador para o valor baixo
+                if (this.player) {
+                    this.player.setDepth(lowDepth);
+                }
+
+                // Itera sobre todos os grupos de objetos relevantes
+                [
+                    this.scraps,
+                    this.boxes,
+                    this.obstacles,
+                    this.kisses,
+                    this.powerups,
+                    this.laneDividers
+                ].forEach(group => {
+                    // Verifica se o grupo existe
+                    if (group) {
+                        group.getChildren().forEach(item => {
+                            // Verifica se o item existe e está ativo
+                            if (item && item.active) {
+                                // Define a profundidade do item para o valor baixo
+                                item.setDepth(lowDepth);
+                            }
+                        });
+                    }
+                });
+                // =================================================================
+                // --- Fim da Nova Lógica ---
+                // =================================================================
+
+                if (this.bikeSound && this.bikeSound.isPlaying) {
+                    this.bikeSound.stop();
+                }
+
+                // Para timers existentes (sem mudança)
+                if (this.kissTimer) this.kissTimer.remove();
+                if (this.bikeTimer) this.bikeTimer.remove();
+                this.powerupText.setText('');
+
+                // --- Criação da Interface de Game Over (com depth alto) ---
+                const highDepth = 200; // Camada de profundidade alta para a UI
+                const centerX = CONFIG.world.width / 2;
+                const centerY = CONFIG.world.height / 2;
+                const boxStartY = centerY - 60;
+                const textStartY = boxStartY + 40;
+                const lineHeight = 30;
+
+                // Cria os elementos da UI, garantindo que usem highDepth
+                this.add.rectangle(centerX, centerY, 380, 250, 0x000000, 0.7).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, boxStartY, 'FIM DE JOGO', { fontSize: '40px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, textStartY, `Pontuação final: ${this.score}`, { fontSize: '24px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, textStartY + lineHeight * 1, `Caixas: ${this.boxCount}`, { fontSize: '20px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, textStartY + lineHeight * 2, `Cocôs: ${this.cocoCount}`, { fontSize: '20px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, textStartY + lineHeight * 3, `Latas: ${this.lataCount}`, { fontSize: '20px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                this.add.text(centerX, textStartY + lineHeight * 4, `Tvs: ${this.tvCount}`, { fontSize: '20px', fill: '#fff' }).setOrigin(0.5).setDepth(highDepth);
+                
+                const restartButtonY = textStartY + lineHeight * 5 + 20;
+                const restartButton = this.add.text(centerX, restartButtonY, 'Reiniciar', { fontSize: '32px', fill: '#0f0', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setDepth(highDepth);
+                restartButton.on('pointerdown', () => this.scene.restart());
+            }
+             // --- FUNÇÕES DE DESTAQUE SIMPLES ---
+             applyHighlightEffect(item, tintColor = 0x00ff00) {
+                 if (!item || !item.active || item.highlightTimer) { return; }
+                 item.originalBaseScale = typeof item.baseScale !== 'undefined' ? item.baseScale : 1.0;
+                 item.baseScale = item.originalBaseScale * 2.0;
+                 this.updateObjectPerspective(item);
+                 item.isTintedGreen = true;
+                 item.setTint(tintColor);
+                 item.highlightTimer = this.time.addEvent({
+                     delay: 300, loop: true, callbackScope: this,
+                     callback: function() {
+                         if (item && item.active) {
+                             item.isTintedGreen = !item.isTintedGreen;
+                             if (item.isTintedGreen) { item.setTint(tintColor); } 
+                             else { item.clearTint(); }
+                         } else if (item.highlightTimer) {
+                              item.highlightTimer.remove(); item.highlightTimer = null;
+                         }
+                     }
+                 });
+             }
+             removeHighlightEffect(item) {
+                 if (!item) return;
+                 if (item.highlightTimer) { item.highlightTimer.remove(); item.highlightTimer = null; }
+                 if (typeof item.originalBaseScale !== 'undefined') {
+                     item.baseScale = item.originalBaseScale;
+                     this.updateObjectPerspective(item);
+                 }
+                 item.clearTint(); item.isTintedGreen = false;
+             }
+        } // Fim da classe GameScene
+
+        // --- CONFIGURAÇÃO E INICIALIZAÇÃO DO PHASER (Sem alteração) ---
+        const phaserConfig = { type: Phaser.AUTO, parent: 'game-container', width: CONFIG.world.width, height: CONFIG.world.height, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, physics: { default: 'arcade', arcade: {} }, scene: [GameScene] };
+        const game = new Phaser.Game(phaserConfig);
+    </script>
+</body>
+</html>
