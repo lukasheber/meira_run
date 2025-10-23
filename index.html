@@ -437,26 +437,29 @@ endMeiraEvent(success) {
                 }
 
 try {
-                    // Verifica se o objeto Telegram WebApp está disponível (se o jogo está rodando no Telegram)
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        console.log("Detectado Telegram WebApp. Preparando para enviar pontuação.");
+try {
+                    console.log("Verificando ambiente Telegram WebApp...");
+                    // *** VERIFICAÇÃO MAIS ROBUSTA ***
+                    // Checa se o objeto existe E se a propriedade initData está presente e não vazia
+                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+                        console.log("Ambiente Telegram WebApp DETECTADO. Preparando para enviar pontuação.");
                         const scoreData = {
                             score: this.score
-                            // Você pode adicionar outros dados aqui se quiser futuramente
-                            // coco: this.cocoCount,
-                            // lata: this.lataCount
                         };
                         const scoreString = JSON.stringify(scoreData);
                         console.log("Enviando dados:", scoreString);
-                        // Envia os dados (como string JSON) para o bot do Telegram
                         window.Telegram.WebApp.sendData(scoreString);
-                        console.log("Dados enviados para o Telegram.");
+                        console.log("Dados enviados para o Telegram (ou tentativa foi feita).");
                     } else {
-                        console.log("Não está rodando no Telegram WebApp. Pontuação não será enviada.");
+                        // Log mais claro indicando por que não enviou
+                        if (!(window.Telegram && window.Telegram.WebApp)) {
+                             console.log("Não está rodando no Telegram WebApp (objeto Telegram.WebApp ausente). Pontuação não será enviada.");
+                        } else {
+                             console.log("Não está rodando no Telegram WebApp (initData ausente/vazio). Pontuação não será enviada.");
+                        }
                     }
                 } catch (e) {
-                    // Captura qualquer erro que possa ocorrer ao tentar enviar
-                    console.error("Erro ao tentar enviar dados para o Telegram:", e);
+                    console.error("Erro durante a verificação ou envio de dados para o Telegram:", e);
                 }
 
                 // Para timers existentes (sem mudança)
