@@ -433,7 +433,6 @@ endMeiraEvent(success) {
  gameOver() {
                 // Se o jogo já acabou, não faz nada
                 if (this.isGameOver) return;
-                console.log("gameOver() chamada!"); // Log inicial
 
 
                 if (this.gameState === 'MEIRA_EVENT') {
@@ -485,34 +484,30 @@ endMeiraEvent(success) {
                     this.bikeSound.stop();
                 }
 
-// =============================================================
-                // --- BLOCO DE ENVIO DE PONTUAÇÃO (COM MAIS LOGS) ---
+                // =============================================================
+                // --- BLOCO DE ENVIO DE PONTUAÇÃO (SEM VERIFICAÇÃO 'IF') ---
                 // =============================================================
                 try {
-                    console.log("--- Iniciando verificação Telegram WebApp (gameOver) ---");
-                    console.log("gameOver: window.Telegram:", window.Telegram);
-                    console.log("gameOver: window.Telegram.WebApp:", window.Telegram ? window.Telegram.WebApp : "Telegram N/A");
-                    console.log("gameOver: window.Telegram.WebApp.initData:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.initData : "WebApp N/A");
-                    console.log("gameOver: WebApp version:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.version : "WebApp N/A");
-                    console.log("gameOver: WebApp platform:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.platform : "WebApp N/A");
+                    console.log("gameOver: Preparando para tentar enviar pontuação..."); // Log simples
+                    const scoreData = { score: this.score };
+                    const scoreString = JSON.stringify(scoreData);
+                    console.log("gameOver: Enviando dados:", scoreString);
 
-
-                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-                        console.log("gameOver: Ambiente Telegram WebApp DETECTADO (initData presente)! Tentando enviar dados...");
-                        const scoreData = { score: this.score };
-                        const scoreString = JSON.stringify(scoreData);
-                        console.log("gameOver: Enviando dados:", scoreString);
-                        window.Telegram.WebApp.sendData(scoreString);
-                        console.log("gameOver: Dados enviados para o Telegram (ou tentativa foi feita).");
-
+                    // --- TENTA ENVIAR DIRETAMENTE ---
+                    // Se window.Telegram.WebApp não existir fora do Telegram,
+                    // isso vai gerar um erro que o 'catch' pegará.
+                    // Se existir mas sendData não funcionar, pode falhar silenciosamente.
+                    if (window.Telegram && window.Telegram.WebApp) { // Verifica minimamente se o objeto existe
+                         window.Telegram.WebApp.sendData(scoreString);
+                         console.log("gameOver: Chamada a sendData() executada.");
                     } else {
-                         console.warn("gameOver: Ambiente Telegram WebApp NÃO detectado (initData ausente/vazio). Pontuação não será enviada."); // Usando warn para destacar
-                        if (!(window.Telegram && window.Telegram.WebApp)) { console.log("gameOver: Objeto Telegram.WebApp ausente."); }
-                        else { console.log("gameOver: initData ausente/vazio."); }
+                         console.log("gameOver: window.Telegram.WebApp não encontrado. Não chamando sendData().");
                     }
-                    console.log("--- Fim da verificação Telegram WebApp (gameOver) ---");
+                    // -----------------------------
+
                 } catch (e) {
-                    console.error("gameOver: Erro durante a verificação ou envio de dados para o Telegram:", e);
+                    // Loga o erro APENAS se ocorrer (provavelmente fora do Telegram)
+                    console.warn("gameOver: Erro ao tentar enviar dados (provavelmente fora do Telegram):", e.message);
                 }
                 // =============================================================
                 // --- FIM DO BLOCO DE ENVIO DE PONTUAÇÃO ---
