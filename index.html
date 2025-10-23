@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-    <title>Meira Run - Protótipo Perspectiva</title>
+    <title>Velocista</title>
     <style>
         body { margin: 0; padding: 0; background-color: #1a1a1a; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         #game-container { border: 3px solid #444; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); overflow: hidden; aspect-ratio: 9 / 16; width: 90vmin; max-width: 450px; height: auto; max-height: 800px; }
@@ -11,6 +11,7 @@
         #instructions { margin-top: 15px; font-size: 1.2rem; text-align: center; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
     <div id="game-container"></div>
@@ -433,6 +434,29 @@ endMeiraEvent(success) {
 
                 if (this.bikeSound && this.bikeSound.isPlaying) {
                     this.bikeSound.stop();
+                }
+
+try {
+                    // Verifica se o objeto Telegram WebApp está disponível (se o jogo está rodando no Telegram)
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        console.log("Detectado Telegram WebApp. Preparando para enviar pontuação.");
+                        const scoreData = {
+                            score: this.score
+                            // Você pode adicionar outros dados aqui se quiser futuramente
+                            // coco: this.cocoCount,
+                            // lata: this.lataCount
+                        };
+                        const scoreString = JSON.stringify(scoreData);
+                        console.log("Enviando dados:", scoreString);
+                        // Envia os dados (como string JSON) para o bot do Telegram
+                        window.Telegram.WebApp.sendData(scoreString);
+                        console.log("Dados enviados para o Telegram.");
+                    } else {
+                        console.log("Não está rodando no Telegram WebApp. Pontuação não será enviada.");
+                    }
+                } catch (e) {
+                    // Captura qualquer erro que possa ocorrer ao tentar enviar
+                    console.error("Erro ao tentar enviar dados para o Telegram:", e);
                 }
 
                 // Para timers existentes (sem mudança)
