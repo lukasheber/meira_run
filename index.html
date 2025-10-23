@@ -193,6 +193,23 @@
 
 
 update(time, delta) {
+
+    // --- LOG PERIÓDICO DO INITDATA ---
+                this.logTimer += delta;
+                if (this.logTimer >= this.logInterval) {
+                    this.logTimer = 0;
+                    try {
+                         if (window.Telegram && window.Telegram.WebApp) {
+                            console.log("UPDATE: WebApp initData:", window.Telegram.WebApp.initData);
+                         } else {
+                            // console.log("UPDATE: WebApp Objeto NÃO existe."); // Opcional
+                         }
+                    } catch(e) {
+                        console.error("UPDATE: Erro ao verificar WebApp:", e);
+                    }
+                }
+                // --- FIM DO LOG PERIÓDICO ---
+
                 if (this.isGameOver) return;
 
                 // --- NOVA LÓGICA DE VELOCIDADE ---
@@ -416,10 +433,8 @@ endMeiraEvent(success) {
  gameOver() {
                 // Se o jogo já acabou, não faz nada
                 if (this.isGameOver) return;
+                console.log("gameOver() chamada!"); // Log inicial
 
-                // --- ADICIONE ESTE ALERT INICIAL ---
-                alert("gameOver() chamada!"); // Para confirmar que a função iniciou
-                // ---------------------------------
 
                 if (this.gameState === 'MEIRA_EVENT') {
                     this.scrapBonusSpeed = 0;
@@ -474,47 +489,30 @@ endMeiraEvent(success) {
                 // --- BLOCO DE ENVIO DE PONTUAÇÃO (COM MAIS LOGS) ---
                 // =============================================================
                 try {
-                    console.log("--- Iniciando verificação Telegram WebApp ---");
-                    
-                    // --- LOGS DE INSPEÇÃO ---
-                    console.log("window.Telegram:", window.Telegram);
-                    console.log("window.Telegram.WebApp:", window.Telegram ? window.Telegram.WebApp : "Telegram N/A");
-                    console.log("window.Telegram.WebApp.initData:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.initData : "WebApp N/A");
-                    // -----------------------
+                    console.log("--- Iniciando verificação Telegram WebApp (gameOver) ---");
+                    console.log("gameOver: window.Telegram:", window.Telegram);
+                    console.log("gameOver: window.Telegram.WebApp:", window.Telegram ? window.Telegram.WebApp : "Telegram N/A");
+                    console.log("gameOver: window.Telegram.WebApp.initData:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.initData : "WebApp N/A");
+                    console.log("gameOver: WebApp version:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.version : "WebApp N/A");
+                    console.log("gameOver: WebApp platform:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.platform : "WebApp N/A");
 
-                    // *** VERIFICAÇÃO MAIS ROBUSTA ***
+
                     if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-                        
-                        // --- MOVA O ALERT PARA DENTRO DO IF ---
-                        alert("Ambiente Telegram WebApp DETECTADO (initData presente)! Tentando enviar dados..."); 
-                        // ------------------------------------
-
-                        console.log("Preparando para enviar pontuação.");
+                        console.log("gameOver: Ambiente Telegram WebApp DETECTADO (initData presente)! Tentando enviar dados...");
                         const scoreData = { score: this.score };
                         const scoreString = JSON.stringify(scoreData);
-                        console.log("Enviando dados:", scoreString);
-                        
+                        console.log("gameOver: Enviando dados:", scoreString);
                         window.Telegram.WebApp.sendData(scoreString);
-                        
-                        console.log("Dados enviados para o Telegram (ou tentativa foi feita).");
-                        alert("Tentativa de sendData() executada APÓS a chamada!"); // Segundo alert
+                        console.log("gameOver: Dados enviados para o Telegram (ou tentativa foi feita).");
 
                     } else {
-                        // --- MOVA O ALERT PARA DENTRO DO ELSE ---
-                        alert("Ambiente Telegram WebApp NÃO detectado (initData ausente/vazio).");
-                        // -------------------------------------
-                        
-                        // Log mais claro indicando por que não enviou
-                        if (!(window.Telegram && window.Telegram.WebApp)) {
-                             console.log("Não está rodando no Telegram WebApp (objeto Telegram.WebApp ausente). Pontuação não será enviada.");
-                        } else {
-                             console.log("Não está rodando no Telegram WebApp (initData ausente/vazio). Pontuação não será enviada.");
-                        }
+                         console.warn("gameOver: Ambiente Telegram WebApp NÃO detectado (initData ausente/vazio). Pontuação não será enviada."); // Usando warn para destacar
+                        if (!(window.Telegram && window.Telegram.WebApp)) { console.log("gameOver: Objeto Telegram.WebApp ausente."); }
+                        else { console.log("gameOver: initData ausente/vazio."); }
                     }
-                    console.log("--- Fim da verificação Telegram WebApp ---");
+                    console.log("--- Fim da verificação Telegram WebApp (gameOver) ---");
                 } catch (e) {
-                    console.error("Erro durante a verificação ou envio de dados para o Telegram:", e);
-                    alert("ERRO no bloco try/catch do sendData: " + e.message); 
+                    console.error("gameOver: Erro durante a verificação ou envio de dados para o Telegram:", e);
                 }
                 // =============================================================
                 // --- FIM DO BLOCO DE ENVIO DE PONTUAÇÃO ---
