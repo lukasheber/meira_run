@@ -387,6 +387,10 @@ endMeiraEvent(success) {
                 // Se o jogo já acabou, não faz nada
                 if (this.isGameOver) return;
 
+                // --- ADICIONE ESTE ALERT INICIAL ---
+                alert("gameOver() chamada!"); // Para confirmar que a função iniciou
+                // ---------------------------------
+
                 if (this.gameState === 'MEIRA_EVENT') {
                     this.scrapBonusSpeed = 0;
                 }
@@ -436,25 +440,40 @@ endMeiraEvent(success) {
                     this.bikeSound.stop();
                 }
 
-try {
-                    console.log("Verificando ambiente Telegram WebApp...");
-                    // *** VERIFICAÇÃO MAIS ROBUSTA ***
-                    // Checa se o objeto existe E se a propriedade initData está presente e não vazia
-                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-                        console.log("Ambiente Telegram WebApp DETECTADO. Preparando para enviar pontuação.");
-                        const scoreData = {
-                            score: this.score
-                        };
-                        const scoreString = JSON.stringify(scoreData);
-                        console.log("Enviando dados:", scoreString);
-                        window.Telegram.WebApp.sendData(scoreString);
-                        console.log("Dados enviados para o Telegram (ou tentativa foi feita).");
+// =============================================================
+                // --- BLOCO DE ENVIO DE PONTUAÇÃO (COM MAIS LOGS) ---
+                // =============================================================
+                try {
+                    console.log("--- Iniciando verificação Telegram WebApp ---");
+                    
+                    // --- LOGS DE INSPEÇÃO ---
+                    console.log("window.Telegram:", window.Telegram);
+                    console.log("window.Telegram.WebApp:", window.Telegram ? window.Telegram.WebApp : "Telegram N/A");
+                    console.log("window.Telegram.WebApp.initData:", (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp.initData : "WebApp N/A");
+                    // -----------------------
 
-                        // --- ADICIONE ESTE ALERT TEMPORÁRIO ---
-                        alert("Tentativa de sendData() executada!"); 
+                    // *** VERIFICAÇÃO MAIS ROBUSTA ***
+                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+                        
+                        // --- MOVA O ALERT PARA DENTRO DO IF ---
+                        alert("Ambiente Telegram WebApp DETECTADO (initData presente)! Tentando enviar dados..."); 
                         // ------------------------------------
 
+                        console.log("Preparando para enviar pontuação.");
+                        const scoreData = { score: this.score };
+                        const scoreString = JSON.stringify(scoreData);
+                        console.log("Enviando dados:", scoreString);
+                        
+                        window.Telegram.WebApp.sendData(scoreString);
+                        
+                        console.log("Dados enviados para o Telegram (ou tentativa foi feita).");
+                        alert("Tentativa de sendData() executada APÓS a chamada!"); // Segundo alert
+
                     } else {
+                        // --- MOVA O ALERT PARA DENTRO DO ELSE ---
+                        alert("Ambiente Telegram WebApp NÃO detectado (initData ausente/vazio).");
+                        // -------------------------------------
+                        
                         // Log mais claro indicando por que não enviou
                         if (!(window.Telegram && window.Telegram.WebApp)) {
                              console.log("Não está rodando no Telegram WebApp (objeto Telegram.WebApp ausente). Pontuação não será enviada.");
@@ -462,12 +481,14 @@ try {
                              console.log("Não está rodando no Telegram WebApp (initData ausente/vazio). Pontuação não será enviada.");
                         }
                     }
+                    console.log("--- Fim da verificação Telegram WebApp ---");
                 } catch (e) {
                     console.error("Erro durante a verificação ou envio de dados para o Telegram:", e);
-                    // --- ADICIONE ESTE ALERT TEMPORÁRIO ---
-                    alert("ERRO ao chamar sendData(): " + e.message); 
-                    // ------------------------------------
+                    alert("ERRO no bloco try/catch do sendData: " + e.message); 
                 }
+                // =============================================================
+                // --- FIM DO BLOCO DE ENVIO DE PONTUAÇÃO ---
+                // =============================================================
 
                 // Para timers existentes (sem mudança)
                 if (this.kissTimer) this.kissTimer.remove();
