@@ -449,6 +449,11 @@ try {
                         console.log("Enviando dados:", scoreString);
                         window.Telegram.WebApp.sendData(scoreString);
                         console.log("Dados enviados para o Telegram (ou tentativa foi feita).");
+
+                        // --- ADICIONE ESTE ALERT TEMPORÁRIO ---
+                        alert("Tentativa de sendData() executada!"); 
+                        // ------------------------------------
+
                     } else {
                         // Log mais claro indicando por que não enviou
                         if (!(window.Telegram && window.Telegram.WebApp)) {
@@ -459,6 +464,9 @@ try {
                     }
                 } catch (e) {
                     console.error("Erro durante a verificação ou envio de dados para o Telegram:", e);
+                    // --- ADICIONE ESTE ALERT TEMPORÁRIO ---
+                    alert("ERRO ao chamar sendData(): " + e.message); 
+                    // ------------------------------------
                 }
 
                 // Para timers existentes (sem mudança)
