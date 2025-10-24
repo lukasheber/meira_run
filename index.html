@@ -26,66 +26,83 @@
             powerups: { bike_duration: 10000, bike_color: 0x00ffff },
             world: { width: 450, height: 800, vanishing_point_y: 0.4, road_width_top: 0.2, road_width_bottom: 0.8, }
         };
-
 /**
  * Submits the final score to the backend API hosted on Replit.
  * @param {number} finalScore The player's final score.
  */
 async function submitScoreToAPI(finalScore) {
-    // !!! SUBSTITUA PELA SUA URL REAL DO REPLIT !!!
+    // !!! SUA URL DO REPLIT JÁ ESTÁ CORRETA AQUI !!!
     const apiUrl = 'https://f361d350-e4e4-4bc6-b017-7bd9004b4ee5-00-z6flr7kyfqdn.riker.replit.dev/submit_score'; 
-    // Exemplo: 'https://meira-run-telegram-bot.yourusername.replit.dev/submit_score'
-
+    
     console.log(`Tentando enviar score ${finalScore} para ${apiUrl}`);
 
     try {
-        // Verifica se está no ambiente Telegram e se initData existe
-        if (!window.Telegram || !window.Telegram.WebApp || !window.Telegram.WebApp.initData) {
-            console.warn('Telegram WebApp initData não disponível. Não é possível enviar score para a API.');
-            // Opcional: Mostrar uma mensagem para o usuário informando que o score não será salvo
-            // window.Telegram.WebApp.showAlert("Não foi possível salvar a pontuação (erro de contexto).");
-            return; // Sai da função se não tiver initData
+        // --- LOGS DE DIAGNÓSTICO ADICIONADOS ---
+        console.log("submitScoreToAPI: Verificando WebApp...");
+        const webApp = window.Telegram ? window.Telegram.WebApp : null; // Pega o objeto WebApp ou null
+        console.log("submitScoreToAPI: window.Telegram.WebApp =", webApp); // Loga o objeto inteiro (ou null)
+        if (webApp) {
+             // Loga as propriedades específicas SE o webApp existir
+             console.log("submitScoreToAPI: webApp.initData =", webApp.initData);
+             console.log("submitScoreToAPI: webApp.initDataUnsafe =", webApp.initDataUnsafe);
+             console.log("submitScoreToAPI: typeof webApp.initData =", typeof webApp.initData); // Loga o TIPO de initData
+        } else {
+             console.log("submitScoreToAPI: webApp não encontrado.");
+        }
+        // --- FIM DOS LOGS ---
+
+        // A verificação original (que falha com string vazia ou se webApp for null)
+        if (!webApp || !webApp.initData) { 
+            console.warn('submitScoreToAPI: Telegram WebApp initData não disponível ou vazio. Não é possível enviar score para a API.');
+            // Opcional: Mostrar alerta ao usuário
+            // if (webApp) webApp.showAlert("Não foi possível salvar a pontuação (erro de contexto initData).");
+            return; // Sai da função se não tiver initData válido (string não vazia)
         }
 
+        // Se chegou aqui, webApp existe e initData tem algum valor (não é null, undefined, ou vazio)
+        console.log("submitScoreToAPI: initData parece válido, prosseguindo com fetch...");
         const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
+            method: 'POST', // Garante que é POST
+            headers: { 
                 'Content-Type': 'application/json',
+                // Adicionar outros headers se a API exigir no futuro (ex: autenticação)
             },
             body: JSON.stringify({
-                // Envia initData e score conforme esperado pelo Pydantic no FastAPI
-                initData: window.Telegram.WebApp.initData, 
+                initData: webApp.initData, // Envia o initData
                 score: finalScore,
             }),
         });
 
+        // --- Processamento da Resposta da API (sem mudanças) ---
         if (response.ok) {
-            const result = await response.json(); // Pega a resposta JSON
+            const result = await response.json(); 
             console.log('Score enviado com sucesso para a API:', result.message);
             // Opcional: Fechar a janela do jogo após sucesso
-            // window.Telegram.WebApp.close();
+            // if (webApp) webApp.close(); 
         } else {
-            // Tenta ler a mensagem de erro da API
             let errorDetail = `HTTP error ${response.status}`;
             try {
                  const errorData = await response.json();
-                 errorDetail = errorData.detail || errorDetail; // Usa o 'detail' do FastAPI se existir
+                 errorDetail = errorData.detail || errorDetail; 
             } catch(e) { /* Ignora erro ao parsear JSON de erro */ }
-
+            
             console.error('Falha ao enviar score para a API:', errorDetail);
             // Mostra um alerta para o usuário dentro do Telegram
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.showAlert(`Erro ao salvar pontuação: ${errorDetail}`);
+            if (webApp) {
+                webApp.showAlert(`Erro ao salvar pontuação: ${errorDetail}`);
             }
         }
+        // --- Fim do Processamento da Resposta ---
+
     } catch (error) {
+        // --- Tratamento de Erro de Rede/Fetch (sem mudanças) ---
         console.error('Erro de rede ou outra falha ao enviar score:', error);
         if (window.Telegram && window.Telegram.WebApp) {
              window.Telegram.WebApp.showAlert('Erro de rede ao tentar salvar a pontuação. Tente novamente mais tarde.');
         }
+        // --- Fim do Tratamento de Erro ---
     }
 }
-
 
 
         // --- CENA PRINCIPAL DO JOGO ---
