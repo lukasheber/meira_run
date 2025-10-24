@@ -17,7 +17,7 @@
     <div id="game-container"></div>
 
     <script>
-        // --- CONFIGURAÇÕES DO JOGO (Sem alteração) ---
+        // --- CONFIGURAÇÕES DO JOGO  ---
         const CONFIG = {
             player: { y_position: 0.85, speed_base: 280, scrap_speed_bonus: 12, box_multiplier_bonus: 1.5, lane_change_speed: 250, box_speed_penalty_step: 0.20, box_speed_penalty_min: 0.35},
             meira: { event_duration: 20000, event_trigger_count: 5, fire_rate: 750, kiss_speed: 420, },
@@ -32,7 +32,6 @@
             constructor() { super('GameScene'); }
 
             preload() {
-                // ... (preload idêntico, sem mudanças) ...
                 this.load.spritesheet('player_run', 'assets/images/player_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
                 this.load.image('velhinhos', 'assets/images/velhinhos.png');
                 this.load.image('taa', 'assets/images/taa.png');
@@ -87,40 +86,9 @@
                 tempGraphics.fillRect(0, 0, 8, 30); 
                 tempGraphics.generateTexture('divider_texture', 8, 30); 
                 tempGraphics.destroy(); 
-                
-                
-                // =============================================================
-                // --- ADICIONAR ESTE BLOCO PARA VERIFICAR/INICIALIZAR WEBAPP ---
-                // =============================================================
-                try {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        console.log("WebApp Objeto existe no CREATE.");
-                        console.log("WebApp initData no CREATE:", window.Telegram.WebApp.initData); // Log inicial
-                        
-                        // Chama o método ready() para garantir a inicialização completa
-                        // (Não precisamos esperar aqui, só garantir que seja chamado)
-                        window.Telegram.WebApp.ready(); 
-                        console.log("WebApp.ready() chamado.");
-
-                        // Opcional: Você pode adicionar um listener de evento visual aqui
-                        // para ter certeza que está no Telegram (ex: mudar a cor do fundo)
-                        // window.Telegram.WebApp.onEvent('viewportChanged', () => {
-                        //     document.body.style.backgroundColor = '#0000FF'; // Fundo azul se no Telegram
-                        // });
-
-                    } else {
-                        console.log("WebApp Objeto NÃO existe no CREATE.");
-                    }
-                } catch(e) {
-                    console.error("Erro ao acessar/inicializar Telegram WebApp no CREATE:", e);
-                }
-                // =============================================================
-                // --- FIM DO BLOCO ---
-                // =============================================================
 
                 // --- Setup dos Personagens ---
                 this.currentLane = 1;
-                // *** MUDANÇA: Jogador criado SEM setDepth inicial explícito ***
                 // (Ele pegará o depth padrão 0, mas será ajustado no update)
                 this.player = this.physics.add.sprite(this.getLaneX(1, this.playerY), this.playerY, 'player_run').setOrigin(0.5, 1);
                 this.anims.create({ key: 'run', frames: this.anims.generateFrameNumbers('player_run', { start: 0, end: 2 }), frameRate: 5, repeat: -1 });
@@ -133,7 +101,6 @@
                 this.anims.create({ key: 'meira_kiss_anim', frames: this.anims.generateFrameNumbers('meira_attack', { start: 0, end: 5 }), frameRate: 10, repeat: 0 });
 
                 // --- Grupos de Física ---
-                // *** MUDANÇA: Configuração sem 'setDepth' padrão ***
                 // O depth será definido dinamicamente no update para obstáculos
                 // e fixo para outros
                 const groupConfigNoDepth = { allowGravity: false }; 
@@ -177,14 +144,14 @@
             
             }
 
-            // --- FUNÇÃO DE DESENHO (drawRoadSlices) - (Simplificada e Corrigida) ---
+            // --- FUNÇÃO DE DESENHO (drawRoadSlices)
             drawRoadSlices() {
                 this.roadGraphics.clear();
                 const vpY = CONFIG.world.height * CONFIG.world.vanishing_point_y;
                 this.roadGraphics.fillStyle(this.skyColor);
                 this.roadGraphics.fillRect(0, 0, CONFIG.world.width, vpY);
                 this.roadGraphics.fillStyle(this.grassColor);
-                this.roadGraphics.fillRect(0, vpY, CONFIG.world.width, CONFIG.world.height - vpY); // Corrigido
+                this.roadGraphics.fillRect(0, vpY, CONFIG.world.width, CONFIG.world.height - vpY);
                 for (const slice of this.roadSlices) {
                     this.roadGraphics.fillStyle(this.roadColor);
                     this.roadGraphics.fillRect(slice.x, slice.y, slice.width, 1);
@@ -193,42 +160,17 @@
 
 
 update(time, delta) {
-
-    // --- LOG PERIÓDICO DO INITDATA ---
-                this.logTimer += delta;
-                if (this.logTimer >= this.logInterval) {
-                    this.logTimer = 0;
-                    try {
-                         if (window.Telegram && window.Telegram.WebApp) {
-                            console.log("UPDATE: WebApp initData:", window.Telegram.WebApp.initData);
-                         } else {
-                            // console.log("UPDATE: WebApp Objeto NÃO existe."); // Opcional
-                         }
-                    } catch(e) {
-                        console.error("UPDATE: Erro ao verificar WebApp:", e);
-                    }
-                }
-                // --- FIM DO LOG PERIÓDICO ---
-
                 if (this.isGameOver) return;
 
-                // --- NOVA LÓGICA DE VELOCIDADE ---
                 const baseSpeed = CONFIG.player.speed_base + this.scrapBonusSpeed;
                 const penalidade = Math.max(CONFIG.player.box_speed_penalty_min, 1 - this.boxCount * CONFIG.player.box_speed_penalty_step);
                 const desiredSpeed = this.isBikeActive ? baseSpeed : baseSpeed * penalidade;
                 this.targetSpeed = desiredSpeed;
-                
-                // --- AJUSTE: Aumentar fator de interpolação ---
                 this.currentSpeed = Phaser.Math.Linear(this.currentSpeed, this.targetSpeed, 0.35); // Aumentado para 0.35 (mais rápido)
                 // ---------------------------------------------
                 
                 const speedForFrame = this.currentSpeed * (delta / 1000);
 
-                // --- ADICIONE ESTE LOG ---
-                // console.log(`Caixas: ${this.boxCount}, Sucata: ${this.scrapBonusSpeed.toFixed(0)}, Penalidade: ${penalidade.toFixed(2)}, VelAlvo: ${this.targetSpeed.toFixed(0)}, VelAtual: ${this.currentSpeed.toFixed(0)}`);
-                // -------------------------
-
-                // --- Resto do update (sem mudanças) ---
                 this.roadPosition = (this.roadPosition + speedForFrame) % 1000000;
                 this.drawRoadSlices();
                 this.distanceToNextDivider -= speedForFrame;
@@ -241,7 +183,6 @@ update(time, delta) {
                 this.updateHUD();
             }
 
-            // --- Callbacks de Colisão (Colisão por Pés) - SEM MUDANÇA ---
             checkObstacleCollision(player, obstacle) {
                 const collisionThreshold = 20; 
                 if (Math.abs(player.y - obstacle.y) < collisionThreshold) {
@@ -260,10 +201,8 @@ checkKissCollision(player, kiss) {
 
                 const collisionThreshold = 20;
                 if (Math.abs(player.y - kiss.y) < collisionThreshold) {
-                    // Se estiver com a bicicleta, apenas destrói o beijo
                     if (this.isBikeActive) {
                         kiss.destroy();
-                        // Opcional: Adicionar som/efeito visual aqui
                     }
                     // Se NÃO estiver com a bicicleta...
                     else {
@@ -279,10 +218,7 @@ checkKissCollision(player, kiss) {
                                     player.clearTint(); // Volta ao normal
                                 }
                             });
-                            // ----------------------------------------------
-                            // Opcional: Adicionar som de "hit" aqui
                         }
-                        // Se não tiver mais caixas...
                         else {
                             this.gameOver(); // Chama o game over normal
                         }
@@ -303,7 +239,6 @@ checkKissCollision(player, kiss) {
                 });
             }
 
-            // --- Restante do código (sem alterações) ---
             handleInput(pointer) { /* ... */ if (this.isGameOver || this.tweens.isTweening(this.player)) return; this.changeLane(pointer.x < CONFIG.world.width / 2 ? -1 : 1); }
             changeLane(direction) { /* ... */ const targetLane = Phaser.Math.Clamp(this.currentLane + direction, 0, 2); if (targetLane === this.currentLane) return; this.currentLane = targetLane; this.player.laneIndex = targetLane; this.tweens.add({ targets: this.player, x: this.getLaneX(targetLane, this.playerY), duration: CONFIG.player.lane_change_speed, ease: 'Power2' }); }
             updateHUD() { /* ... */ this.scoreText.setText(`Pontos: ${this.score}`); this.boxText.setText(`Caixas: ${this.boxCount} (x${this.scoreMultiplier.toFixed(1)})`); }
@@ -316,10 +251,9 @@ endMeiraEvent(success) {
                 this.meira.anims.stop();
                 this.meira.setTexture('meira');
 
-                // --- MUDANÇA AQUI ---
+
                 // Reseta o bônus de velocidade SEMPRE que o evento termina
                 this.scrapBonusSpeed = 0; 
-                // -------------------
 
                 // A penalidade das caixas será recalculada automaticamente no próximo update
                 
@@ -338,8 +272,6 @@ endMeiraEvent(success) {
                 if (key === 'velhinhos') { item.body.setSize(70, 30); item.body.setOffset(5, 66); } 
                 else if (key === 'taa') { item.body.setSize(70, 40); item.body.setOffset(5, 88); } 
                 else if (key === 'tv' || key === 'coco' || key === 'lata') { item.body.setSize(28, 28); item.body.setOffset(2, 2); }
-                
-                // --- CHAMADA DO applyHighlightEffect (SEM MUDANÇA) ---
                 if (applyHighlight) {
                     if (key === 'box') { this.applyHighlightEffect(item, 0x00ff00); } // Verde para caixa
                     else if (key === 'bike') { this.applyHighlightEffect(item, 0x00ff00); } // Verde para bike
@@ -355,7 +287,6 @@ endMeiraEvent(success) {
                 } else if (itemKey === 'lata') {
                     this.lataCount++;
                 }
-                // A contagem de 'box' já acontece no bloco 'if (isBox)' abaixo, então não precisa aqui.
                   else if (itemKey === 'tv') {
                      this.tvCount++; // Se você adicionar o contador de TV
                 } item.destroy(); this.score += Math.floor(scoreValue * this.scoreMultiplier); if (isBox) {this.boxCount++; this.scoreMultiplier += CONFIG.player.box_multiplier_bonus; this.sound.play('catch_box_sfx', { volume: 0.7 }); if (this.boxCount >= this.lastEventTriggerCount + CONFIG.meira.event_trigger_count) { this.startMeiraEvent(); } } else if (isPowerup) { this.activateBike(); } else { this.scrapBonusSpeed += CONFIG.player.scrap_speed_bonus; this.sound.play('catch_scrap_sfx', { volume: 0.6 }); } } 
@@ -367,20 +298,16 @@ endMeiraEvent(success) {
                     // Se já estiver ativa, apenas reinicia o timer (remove o antigo abaixo)
                     if (this.bikeTimer) this.bikeTimer.remove();
                 } else {
-                     // --- ADICIONE ESTA LINHA: Guarda a escala base original ---
                     // Só guarda se ainda não tiver guardado (primeira ativação)
                     if (typeof this.player.originalBaseScale === 'undefined') {
                          this.player.originalBaseScale = this.player.baseScale;
                     }
-                    // -----------------------------------------------------
                 }
 
                 this.isBikeActive = true;
 
-                // --- ADICIONE ESTAS LINHAS: Define a nova escala base e atualiza ---
                 this.player.baseScale = this.player.originalBaseScale * 1.5; // Ou o fator que você escolher (ex: 2.0 para dobrar)
                 this.updateObjectPerspective(this.player); // Aplica a mudança de tamanho imediatamente
-                // -----------------------------------------------------------------
 
                 this.player.anims.play('bike_run', true); // Toca a animação da bicicleta
                 
@@ -480,38 +407,44 @@ endMeiraEvent(success) {
                 // --- Fim da Nova Lógica ---
                 // =================================================================
 
+                // =============================================================
+                // --- ENVIO DE PONTUAÇÃO TELEGRAM (DO ZERO) ---
+                // =============================================================
+                try {
+                    console.log("Tentando enviar pontuação para o Telegram...");
+
+                    // 1. Verifica minimamente se o objeto WebApp existe
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        
+                        // 2. Prepara os dados (apenas o score por enquanto)
+                        const scoreData = {
+                            score: this.score 
+                        };
+                        const scoreString = JSON.stringify(scoreData);
+                        console.log("Dados a serem enviados:", scoreString);
+
+                        // 3. Chama sendData()
+                        window.Telegram.WebApp.sendData(scoreString);
+
+                        // 4. Loga que a tentativa foi feita (NÃO garante que o bot recebeu)
+                        console.log("Chamada a window.Telegram.WebApp.sendData() executada.");
+
+                    } else {
+                        // Loga se o objeto WebApp não foi encontrado
+                        console.log("Objeto window.Telegram.WebApp não encontrado. Não é possível enviar pontuação.");
+                    }
+                } catch (e) {
+                    // Loga qualquer erro que ocorra durante o processo
+                    console.error("Erro ao tentar preparar ou enviar dados para o Telegram:", e);
+                }
+                // =============================================================
+                // --- FIM DO BLOCO DE ENVIO ---
+                // =============================================================
+
+
                 if (this.bikeSound && this.bikeSound.isPlaying) {
                     this.bikeSound.stop();
                 }
-
-                // =============================================================
-                // --- BLOCO DE ENVIO DE PONTUAÇÃO (SEM VERIFICAÇÃO 'IF') ---
-                // =============================================================
-                try {
-                    console.log("gameOver: Preparando para tentar enviar pontuação..."); // Log simples
-                    const scoreData = { score: this.score };
-                    const scoreString = JSON.stringify(scoreData);
-                    console.log("gameOver: Enviando dados:", scoreString);
-
-                    // --- TENTA ENVIAR DIRETAMENTE ---
-                    // Se window.Telegram.WebApp não existir fora do Telegram,
-                    // isso vai gerar um erro que o 'catch' pegará.
-                    // Se existir mas sendData não funcionar, pode falhar silenciosamente.
-                    if (window.Telegram && window.Telegram.WebApp) { // Verifica minimamente se o objeto existe
-                         window.Telegram.WebApp.sendData(scoreString);
-                         console.log("gameOver: Chamada a sendData() executada.");
-                    } else {
-                         console.log("gameOver: window.Telegram.WebApp não encontrado. Não chamando sendData().");
-                    }
-                    // -----------------------------
-
-                } catch (e) {
-                    // Loga o erro APENAS se ocorrer (provavelmente fora do Telegram)
-                    console.warn("gameOver: Erro ao tentar enviar dados (provavelmente fora do Telegram):", e.message);
-                }
-                // =============================================================
-                // --- FIM DO BLOCO DE ENVIO DE PONTUAÇÃO ---
-                // =============================================================
 
                 // Para timers existentes (sem mudança)
                 if (this.kissTimer) this.kissTimer.remove();
