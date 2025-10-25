@@ -12,7 +12,6 @@
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-    <script src="https://telegram.org/js/games.js"></script>
     
 </head>
 <body>
@@ -29,75 +28,54 @@
             world: { width: 450, height: 800, vanishing_point_y: 0.4, road_width_top: 0.2, road_width_bottom: 0.8, }
         };
 /**
-     * Submits the final score to the backend API hosted on Replit.
-     * Tries to use initData, falls back to initDataUnsafe (INSECURE for validation).
+     * Submits the final score AND nonce to the backend API.
      * @param {number} finalScore The player's final score.
+     * @param {string | null} nonce The unique nonce for this game session.
      */
-    async function submitScoreToAPI(finalScore) {
-        const apiUrl = 'https://f361d350-e4e4-4bc6-b017-7bd9004b4ee5-00-z6flr7kyfqdn.riker.replit.dev/submit_score';
-        console.log(`Tentando enviar score ${finalScore} para ${apiUrl}`);
+    async function submitScoreToAPI(finalScore, nonce) { // Adicionado 'nonce' como parâmetro
+        const apiUrl = 'https://f361d350-e4e4-4bc6-b017-7bd9004b4ee5-00-z6flr7kyfqdn.riker.replit.dev/submit_score'; 
+        
+        console.log(`Tentando enviar score ${finalScore} com nonce ${nonce} para ${apiUrl}`);
+
+        // 1. Verifica se temos um nonce
+        if (!nonce) {
+            console.error("submitScoreToAPI: Nonce está faltando! Não é possível enviar score.");
+            return; // Sai se não tiver nonce
+        }
 
         try {
-            console.log("submitScoreToAPI: Verificando WebApp...");
-            const webApp = window.Telegram ? window.Telegram.WebApp : null;
-            console.log("submitScoreToAPI: window.Telegram.WebApp =", webApp);
+            // 2. Prepara o payload com score e nonce
+            const payload = {
+                score: finalScore,
+                nonce: nonce 
+            };
+            console.log("submitScoreToAPI: Enviando payload:", payload);
 
-            // Verifica SE TEMOS o objeto WebApp
-            if (!webApp) {
-                console.warn('submitScoreToAPI: Objeto Telegram.WebApp não encontrado. Não é possível enviar score.');
-                return;
-            }
-
-            // Loga os dados disponíveis
-            console.log("submitScoreToAPI: webApp.initData =", webApp.initData);
-            console.log("submitScoreToAPI: webApp.initDataUnsafe =", webApp.initDataUnsafe);
-            console.log("submitScoreToAPI: typeof webApp.initData =", typeof webApp.initData);
-
-            // --- LÓGICA DE WORKAROUND ---
-            let dataToSend = {};
-            if (webApp.initData && typeof webApp.initData === 'string' && webApp.initData.length > 0) {
-                 // Se initData existe e NÃO é vazio, usa ele (preferencialmente)
-                 console.log("submitScoreToAPI: Usando initData para envio.");
-                 dataToSend = {
-                     initData: webApp.initData,
-                     score: finalScore
-                 };
-            } else if (webApp.initDataUnsafe && typeof webApp.initDataUnsafe.user !== 'undefined') {
-                 // Senão, se initDataUnsafe.user existe, usa initDataUnsafe (INSEGURO)
-                 console.warn("submitScoreToAPI: initData está vazio! Usando initDataUnsafe como fallback (INSEGURO).");
-                 dataToSend = {
-                     // initData: null, // Ou envia a string vazia? Melhor omitir ou enviar null.
-                     initDataUnsafe: webApp.initDataUnsafe, // Envia o objeto unsafe
-                     score: finalScore
-                 };
-            } else {
-                 // Se nenhum dado de usuário estiver disponível
-                 console.error("submitScoreToAPI: Nem initData nem initDataUnsafe.user disponíveis. Não é possível enviar score.");
-                 if (webApp) webApp.showAlert("Erro crítico: Não foi possível obter dados de usuário para salvar a pontuação.");
-                 return;
-            }
-            // --- FIM DO WORKAROUND ---
-
-            console.log("submitScoreToAPI: Prosseguindo com fetch...");
+            // 3. Faz a requisição POST
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', },
-                body: JSON.stringify(dataToSend), // Envia o objeto preparado
+                headers: { 
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload), // Envia score e nonce
             });
 
-            // Processamento da resposta (sem mudanças)...
+            // 4. Processa a resposta (sem mudanças aqui)
             if (response.ok) {
-                const result = await response.json();
+                const result = await response.json(); 
                 console.log('Score enviado com sucesso para a API:', result.message);
-                // if (webApp) webApp.close();
+                // Opcional: Fechar a janela do jogo após sucesso
+                // if (window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); 
             } else {
                 let errorDetail = `HTTP error ${response.status}`;
                 try {
                      const errorData = await response.json();
-                     errorDetail = errorData.detail || errorDetail;
+                     errorDetail = errorData.detail || errorDetail; 
                 } catch(e) { /* Ignora */ }
                 console.error('Falha ao enviar score para a API:', errorDetail);
-                if (webApp) webApp.showAlert(`Erro ao salvar pontuação: ${errorDetail}`);
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.showAlert(`Erro ao salvar pontuação: ${errorDetail}`);
+                }
             }
 
         } catch (error) {
@@ -107,11 +85,12 @@
             }
         }
     }
-
-
         // --- CENA PRINCIPAL DO JOGO ---
         class GameScene extends Phaser.Scene {
-            constructor() { super('GameScene'); }
+            constructor() { super('GameScene'); 
+                this.gameNonce = null;
+            }
+            
 
             preload() {
                 this.load.spritesheet('player_run', 'assets/images/player_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
@@ -140,13 +119,20 @@
 
             create() {
 
-                // --- ADICIONE ESTE LOG NO TOPO ---
-                console.log("===================================");
-                console.log("INÍCIO DO CREATE");
-                console.log("location.href:", location.href); // URL completa
-                console.log("location.hash:", location.hash); // O fragmento hash
-                console.log("===================================");
-                // --- FIM DO LOG ---
+// --- ADICIONE ESTE BLOCO NO INÍCIO DO CREATE ---
+               try {
+                   const urlParams = new URLSearchParams(window.location.search);
+                   this.gameNonce = urlParams.get('nonce');
+                   if (this.gameNonce) {
+                       console.log("Nonce encontrado na URL:", this.gameNonce);
+                   } else {
+                       console.warn("Nonce NÃO encontrado na URL (?nonce=...). Envio de score falhará.");
+                   }
+               } catch (e) {
+                   console.error("Erro ao tentar ler parâmetros da URL:", e);
+                   this.gameNonce = null;
+               }
+               // --- FIM DO BLOCO ---
                 
                 // --- Inicialização de Variáveis ---
                 this.gameState = 'NORMAL_RUN'; this.isGameOver = false; this.score = 0; this.boxCount = 0; this.scoreMultiplier = 1; this.scrapBonusSpeed = 0; this.lastEventTriggerCount = 0;
@@ -498,11 +484,10 @@ endMeiraEvent(success) {
                 // --- Fim da Nova Lógica ---
                 // =================================================================
 
+// =============================================
+                // --- CHAMA A FUNÇÃO PARA ENVIAR O SCORE E O NONCE ---
+                submitScoreToAPI(this.score, this.gameNonce); // Passa this.score E this.gameNonce
                 // =============================================
-                // --- CHAMA A FUNÇÃO PARA ENVIAR O SCORE VIA API ---
-                // submitScoreToAPI(this.score); // Passa a pontuação final
-                // =============================================
-
 
                 if (this.bikeSound && this.bikeSound.isPlaying) {
                     this.bikeSound.stop();
