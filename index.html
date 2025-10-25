@@ -33,7 +33,11 @@
      * @param {string | null} nonce The unique nonce for this game session.
      */
     async function submitScoreToAPI(finalScore, nonce) { // Adicionado 'nonce' como parâmetro
+<<<<<<< HEAD
         const apiUrl = 'https://raspberrypi.tail1e1b3.ts.net/submit_score'; 
+=======
+        const apiUrl = 'https://raspberrypi.tail1e1b3.ts.net//submit_score'; 
+>>>>>>> 7b37cafa2587672f3e49f6523ee57d6a6daa302c
         
         console.log(`Tentando enviar score ${finalScore} com nonce ${nonce} para ${apiUrl}`);
 
