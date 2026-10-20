@@ -904,8 +904,8 @@ class RunScene extends Phaser.Scene {
         this.nextRowAt += clamp(this.speed * (0.78 - 0.18 * diff), 13, 26);
       }
       if (this.dist >= this.nextMilestone) {
-        this.popup(W / 2, 316, fmt(this.nextMilestone) + ' m!', '#ffffff', 34);
-        this.popup(W / 2, 352, pick(RIO_JOKES), '#ffe9a6', 18);
+        this.popup(W / 2, 316, fmt(this.nextMilestone) + ' m!', '#ffffff', 34, 2400);
+        this.popup(W / 2, 352, pick(RIO_JOKES), '#ffe9a6', 20, 2600);
         Synth.milestone();
         this.nextMilestone += 500;
       }
@@ -1407,16 +1407,17 @@ class RunScene extends Phaser.Scene {
   // ------------------------------------------------------------------ fx helpers
   playSfx(key, cfg) { if (this.cache.audio.exists(key)) this.sound.play(key, cfg); }
 
-  popup(x, y, text, color, size = 22) {
+  // hold = ms the text stays fully visible before fading (milestones use a long one so the joke can be read)
+  popup(x, y, text, color, size = 22, hold = 520) {
     const numeric = /^[+\-\d.,\sm!x]+$/.test(text);
-    const t = this.add.text(x + rand(-10, 10), y, text, {
+    const t = this.add.text(hold > 520 ? x : x + rand(-10, 10), y, text, {
       fontFamily: numeric ? '"Press Start 2P", monospace' : '"Pixelify Sans", monospace',
       fontSize: Math.round(numeric ? size * 0.7 : size) + 'px', fontStyle: numeric ? 'normal' : 'bold',
       color, stroke: '#1a0b2e', strokeThickness: Math.max(4, size / 4),
     }).setOrigin(0.5).setDepth(6000).setResolution(DPR);
-    this.tweens.add({ targets: t, y: y - 56, duration: 820, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, y: y - (hold > 520 ? 24 : 56), duration: hold + 300, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: t, scale: { from: 1.35, to: 1 }, duration: 220, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, alpha: 0, delay: 520, duration: 300, onComplete: () => t.destroy() });
+    this.tweens.add({ targets: t, alpha: 0, delay: hold, duration: hold > 520 ? 450 : 300, onComplete: () => t.destroy() });
   }
 }
 
