@@ -138,6 +138,11 @@
   .best-chip { font-size: calc(var(--u)*17); padding: calc(var(--u)*6) calc(var(--u)*16); border-radius: 999px; background: rgba(18,9,36,.6); border: 1px solid var(--line); }
   .best-chip b { color: var(--yellow); font-family: var(--num); font-weight: 400; font-size: .8em; }
   .title-bottom { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u)*12); padding-bottom: calc(var(--u)*222); }
+  .api-status { display: flex; align-items: center; gap: calc(var(--u)*7); font-size: calc(var(--u)*14); color: var(--muted);
+    padding: calc(var(--u)*5) calc(var(--u)*12); border-radius: 999px; background: rgba(18,9,36,.55); }
+  .api-status::before { content: ''; width: calc(var(--u)*8); height: calc(var(--u)*8); border-radius: 50%; background: #b9a9d6; }
+  .api-status.ok::before { background: var(--green); box-shadow: 0 0 calc(var(--u)*8) var(--green); }
+  .api-status.down { color: #ffb3b3; } .api-status.down::before { background: #ff5c5c; box-shadow: 0 0 calc(var(--u)*8) #ff5c5c; }
   .note { font-size: calc(var(--u)*13); color: var(--muted); max-width: calc(var(--u)*320); text-align: center; }
   #btn-play { font-size: calc(var(--u)*32); padding: calc(var(--u)*14) calc(var(--u)*52); animation: breathe 1.6s ease-in-out infinite; }
   @keyframes breathe { 50% { transform: scale(1.045); } }
@@ -230,6 +235,7 @@
       <div class="tagline">Recicla. Carrega caixa. Foge do chefe.<br><small>Destino: Rio de Janeiro (um dia)</small></div>
       <div class="title-mid">
         <div class="best-chip">Seu recorde: <b id="title-best">0</b></div>
+        <div id="api-status" class="api-status off"></div>
       </div>
       <div class="title-bottom">
         <button id="btn-play" class="btn">Correr!</button>
@@ -305,8 +311,13 @@
 // ======================================================================
 //  Config
 // ======================================================================
-const API_URL = 'https://raspberrypi.tail1e1b3.ts.net';
-const NONCE = new URLSearchParams(location.search).get('nonce');
+const PARAMS = new URLSearchParams(location.search);
+const NONCE = PARAMS.get('nonce');
+// The bot puts the API's current public address in the game link (?api=...)
+const API_URL = (() => {
+  try { const u = new URL(PARAMS.get('api')); if (u.protocol === 'https:') return u.origin; } catch (e) { /* missing or invalid */ }
+  return 'https://raspberrypi.tail1e1b3.ts.net';
+})();
 const DPR = Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
 
 // Logical screen (everything is laid out in these units)
@@ -391,9 +402,9 @@ function mulberry32(a) {
 // ======================================================================
 //  Score API (Raspberry Pi via Tailscale Funnel)
 // ======================================================================
-async function api(path, opts = {}) {
+async function api(path, opts = {}, timeoutMs = 9000) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 9000);
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const r = await fetch(API_URL + path, { ...opts, signal: ctl.signal });
     let data = {};
@@ -405,6 +416,7 @@ async function api(path, opts = {}) {
     clearTimeout(timer);
   }
 }
+const pingApi = () => api('/', {}, 7000);
 const submitScore = score => api('/submit_score', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score, nonce: NONCE }),
 });
@@ -488,7 +500,16 @@ const UI = {
     tap('btn-share', () => { try { window.TelegramGameProxy.shareScore(); } catch (e) { /* not in Telegram */ } });
     $('title-best').textContent = fmt(store.get('meira_best', 0));
     if (!NONCE) $('offline-note').classList.remove('off');
+    else this.checkServer();
     this.setMuted(scene.sound.mute);
+  },
+  // Pings the score API so players know up front if their score won't be saved
+  async checkServer() {
+    const el = $('api-status');
+    el.className = 'api-status'; el.textContent = 'Verificando servidor de pontos…';
+    const r = await pingApi();
+    el.className = 'api-status ' + (r.ok ? 'ok' : 'down');
+    el.textContent = r.ok ? 'Servidor de pontos online' : 'Servidor de pontos fora do ar';
   },
   show(name) {
     for (const s of this.screens) $('scr-' + s).classList.toggle('off', s !== name);
@@ -1401,7 +1422,7 @@ class RunScene extends Phaser.Scene {
     const r = await submitScore(score);
     if (this.state !== 'over') return;
     if (r.ok) UI.saveStatus('Pontuação enviada pro grupo ✓', 'ok');
-    else UI.saveStatus(r.status === 0 ? 'Sem conexão: pontuação não enviada' : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram' : 'Erro ao enviar a pontuação', 'err');
+    else UI.saveStatus(r.status === 0 ? (navigator.onLine === false ? 'Sem internet: pontuação não enviada' : 'Servidor de pontos não respondeu: pontuação não enviada') : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram' : 'Erro ao enviar a pontuação', 'err');
   }
 
   // ------------------------------------------------------------------ fx helpers
