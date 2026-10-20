@@ -132,7 +132,8 @@
   .logo-meira { position: absolute; width: calc(var(--u)*86); height: calc(var(--u)*86); right: calc(var(--u)*-52); top: calc(var(--u)*-46);
     filter: drop-shadow(0 calc(var(--u)*5) 0 rgba(0,0,0,.35)); animation: peek 2.6s ease-in-out infinite; }
   @keyframes peek { 0%,100% { transform: rotate(14deg) translateY(0); } 50% { transform: rotate(6deg) translateY(calc(var(--u)*-6)); } }
-  .tagline { margin-top: calc(var(--u)*22); font-size: calc(var(--u)*17); color: var(--muted); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+  .tagline { margin-top: calc(var(--u)*22); font-size: calc(var(--u)*17); color: var(--muted); text-shadow: 0 2px 0 rgba(0,0,0,.4); text-align: center; line-height: 1.35; }
+  .tagline small { font-size: calc(var(--u)*14); color: var(--yellow); opacity: .85; }
   .title-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u)*12); width: 100%; }
   .best-chip { font-size: calc(var(--u)*17); padding: calc(var(--u)*6) calc(var(--u)*16); border-radius: 999px; background: rgba(18,9,36,.6); border: 1px solid var(--line); }
   .best-chip b { color: var(--yellow); font-family: var(--num); font-weight: 400; font-size: .8em; }
@@ -226,7 +227,7 @@
         <div class="logo-word">MEIRA</div>
         <div class="logo-run">RUN</div>
       </div>
-      <div class="tagline">Recicla. Carrega caixa. Foge do chefe.</div>
+      <div class="tagline">Recicla. Carrega caixa. Foge do chefe.<br><small>Destino: Rio de Janeiro (um dia)</small></div>
       <div class="title-mid">
         <div class="best-chip">Seu recorde: <b id="title-best">0</b></div>
       </div>
@@ -281,7 +282,7 @@
           <div id="over-best" class="best-line"></div>
         </div>
         <div class="stats">
-          <div class="stat"><span class="dist">metros</span><span id="st-dist">0</span></div>
+          <div class="stat"><span class="dist">metros rumo ao Rio</span><span id="st-dist">0</span></div>
           <div class="stat"><img class="px" src="assets/images/box.png" alt=""><span id="st-delivered">0</span><span class="k">caixas entregues</span></div>
           <div class="stat"><img class="px" src="assets/images/velhinhos.png" alt=""><span id="st-jumped">0</span><span class="k">velhinhos pulados</span></div>
           <div class="stat"><img class="px" src="assets/images/tv.png" alt=""><span id="st-tv">0</span><span class="k">TVs</span></div>
@@ -345,6 +346,10 @@ const KINDS = {
   tree:      { tex: 'tree',      size: 1.6,  group: 'prop', shadow: 1.1 },
 };
 const SCRAPS = ['tv', 'lata', 'coco'];
+// He's always running toward Rio... and never gets there
+const RIO_JOKES = ['O Rio tá logo ali…', 'Cristo continua longe…', 'Carioca girl em breve…', 'Já sente a brisa de Copacabana?',
+  'Só mais um pouquinho pro Rio!', 'O Cristo tá de braços abertos te esperando', 'Quase carioca!', 'Rio de Janeiro: em breve™'];
+const RIO_SIZE = { w: 450, h: 236, peakY: 40 };   // Corcovado texture; the statue stands on the peak
 
 const DEATHS = {
   velhinhos: { title: 'Parou pra ajudar os velhinhos', subs: [
@@ -571,11 +576,15 @@ class RunScene extends Phaser.Scene {
     window.__scene = this;
     this.cameras.main.setZoom(DPR).centerOn(W / 2, H / 2);
     this.makeTextures();
-    for (const k of ['player_run', 'bike_run', 'meira_attack', 'velhinhos', 'taa', 'tv', 'coco', 'lata', 'bike', 'meira', 'coracao', 'box', 'lamp', 'bin', 'tree', 'skyFar', 'skyNear', 'star'])
+    for (const k of ['player_run', 'bike_run', 'meira_attack', 'velhinhos', 'taa', 'tv', 'coco', 'lata', 'bike', 'meira', 'coracao', 'box', 'lamp', 'bin', 'tree', 'skyFar', 'skyNear', 'star', 'rio', 'cristo'])
       this.textures.get(k).setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     // --- backdrop ---
     this.add.image(0, 0, 'sky').setOrigin(0).setDepth(-100);
+    this.rio = this.add.image(W / 2, HORIZON + 2, 'rio').setOrigin(0.5, 1).setDepth(-90);
+    this.cristoGlow = this.add.image(W / 2, 0, 'glow').setTint(0xc9dcff).setBlendMode(Phaser.BlendModes.ADD).setDepth(-89);
+    this.cristo = this.add.image(W / 2, 0, 'cristo').setOrigin(0.5, 1).setDepth(-88);
+    this.rioScale = 1;
     this.skyFar = this.add.image(W / 2, HORIZON + 2, 'skyFar').setOrigin(0.5, 1).setDepth(-80);
     this.skyNear = this.add.image(W / 2, HORIZON + 2, 'skyNear').setOrigin(0.5, 1).setDepth(-70);
     this.roadG = this.add.graphics().setDepth(-50);
@@ -677,7 +686,7 @@ class RunScene extends Phaser.Scene {
       c.fillStyle = g; c.fillRect(0, 0, w, h);
       const rnd = mulberry32(7);
       for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(255,255,255,${0.25 + rnd() * 0.6})`; const s = rnd() < 0.15 ? 2 : 1; c.fillRect(rnd() * w, rnd() * h * 0.5, s, s); }
-      const cx = w / 2, cy = h - 54, r = 74;
+      const cx = w * 0.2, cy = h - 62, r = 62;
       const sg = c.createLinearGradient(0, cy - r, 0, cy + r);
       sg.addColorStop(0, '#ffe98a'); sg.addColorStop(0.55, '#ff9b6a'); sg.addColorStop(1, '#ff4f8b');
       c.save(); c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
@@ -700,6 +709,46 @@ class RunScene extends Phaser.Scene {
             if (rnd() < winChance) { c.fillStyle = win; c.globalAlpha = 0.4 + rnd() * 0.6; c.fillRect(wx, wy, 3, 3); c.globalAlpha = 1; }
         x += bw + Math.floor(rnd() * 4);
       }
+    });
+    // Rio: Corcovado in the middle (the road leads to it), Sugarloaf + cable car on the right
+    canvas('rio', RIO_SIZE.w, RIO_SIZE.h, (c, w, h) => {
+      const poly = (pts, fill) => { c.fillStyle = fill; c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) c.lineTo(x, y); c.closePath(); c.fill(); };
+      const pk = RIO_SIZE.peakY;
+      const corcovado = [[40, h], [95, h - 70], [140, h - 120], [175, h - 160], [198, pk + 14], [212, pk + 2], [217, pk], [233, pk], [238, pk + 3],
+        [246, pk + 18], [258, h - 150], [268, h - 108], [292, h - 70], [330, h - 42], [380, h - 18], [420, h]];
+      poly(corcovado, '#2d1849');
+      // sunset rim light on the left (the sun is on that side) + darker right face
+      poly([[95, h - 70], [140, h - 120], [175, h - 160], [198, pk + 14], [212, pk + 2], [217, pk], [219, pk + 8], [204, pk + 26], [182, h - 150], [148, h - 108], [104, h - 62]], '#4a2766');
+      poly([[233, pk], [238, pk + 3], [246, pk + 18], [258, h - 150], [268, h - 108], [292, h - 70], [282, h - 60], [258, h - 98], [246, h - 140], [238, pk + 24]], '#24123c');
+      const rnd = mulberry32(21);                         // forest speckles
+      for (let i = 0; i < 420; i++) {
+        const x = 60 + rnd() * 340, y = pk + 30 + rnd() * (h - pk - 30);
+        if (c.getImageData(x | 0, y | 0, 1, 1).data[3] > 0) { c.fillStyle = rnd() < 0.5 ? '#251340' : '#3a1f58'; c.fillRect(x | 0, y | 0, 2, 1); }
+      }
+      // Urca hill + Sugarloaf
+      poly([[318, h], [336, h - 58], [352, h - 66], [366, h - 52], [378, h]], '#3a1f5c');
+      c.fillStyle = '#3f2263'; c.beginPath(); c.ellipse(404, h - 56, 26, 88, -0.16, Math.PI, 0); c.lineTo(432, h); c.lineTo(376, h); c.closePath(); c.fill();
+      c.fillStyle = '#56307a'; c.beginPath(); c.ellipse(398, h - 58, 9, 76, -0.16, Math.PI, Math.PI * 1.5); c.lineTo(398, h - 40); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(255,220,180,.55)'; c.lineWidth = 1;   // bondinho cables
+      c.beginPath(); c.moveTo(352, h - 66); c.lineTo(398, h - 142); c.stroke();
+      c.fillStyle = '#ffd77a'; c.fillRect(374, h - 104, 3, 2);
+    });
+    // Christ the Redeemer, lit at night (pixel art, 34x36)
+    canvas('cristo', 34, 36, c => {
+      const lit = '#f4ecff', mid = '#d9cdf2', shade = '#ab98d4';
+      const row = (y, x0, x1, col) => { c.fillStyle = col; c.fillRect(x0, y, x1 - x0, 1); };
+      c.fillStyle = shade; c.fillRect(13, 31, 8, 5);                       // pedestal
+      for (let y = 10; y < 31; y++) {                                      // robe, wider toward the feet
+        const half = 3 + Math.round((y - 10) * 2 / 21), x0 = 17 - half, x1 = 17 + half;
+        row(y, x0, x1, lit); row(y, x1 - 2, x1, mid); row(y, x1 - 1, x1, shade);
+      }
+      row(10, 1, 33, lit); row(11, 1, 33, lit); row(12, 2, 32, mid);       // open arms
+      for (let y = 13; y < 19; y++) {                                      // sleeves hanging under the arms
+        const reach = 11 - Math.round((y - 13) * 7 / 6);
+        row(y, 17 - 3 - reach, 14, mid); row(y, 20, 20 + reach, shade);
+      }
+      c.fillStyle = lit; c.fillRect(15, 3, 5, 6); c.fillStyle = mid; c.fillRect(19, 3, 1, 6); // head
+      c.fillStyle = lit; c.fillRect(16, 9, 3, 1);                          // neck
     });
     skyline('skyFar', 640, 170, 3, '#4b2563', '#ff9fbf', 0.12, 50, 160);
     skyline('skyNear', 640, 120, 11, '#1f1033', '#ffd77a', 0.22, 24, 110);
@@ -855,7 +904,8 @@ class RunScene extends Phaser.Scene {
         this.nextRowAt += clamp(this.speed * (0.78 - 0.18 * diff), 13, 26);
       }
       if (this.dist >= this.nextMilestone) {
-        this.popup(W / 2, 250, fmt(this.nextMilestone) + ' m!', '#ffffff', 34);
+        this.popup(W / 2, 316, fmt(this.nextMilestone) + ' m!', '#ffffff', 34);
+        this.popup(W / 2, 352, pick(RIO_JOKES), '#ffe9a6', 18);
         Synth.milestone();
         this.nextMilestone += 500;
       }
@@ -880,7 +930,18 @@ class RunScene extends Phaser.Scene {
     this.drawStreaks(dtReal);
     this.skyFar.x = W / 2 - this.pl.wx * 0.05;
     this.skyNear.x = W / 2 - this.pl.wx * 0.11;
+    this.updateRio(dtReal);
     if (playing || this.state === 'dying') UI.update(this);
+  }
+
+  // Corcovado creeps closer as you run... but you never get there
+  updateRio(dt) {
+    const target = 1 + Math.min(this.dist, 6000) / 6000 * 0.3;
+    this.rioScale += (target - this.rioScale) * Math.min(1, dt * 2);
+    const k = this.rioScale, x = W / 2 - this.pl.wx * 0.03, peakY = HORIZON + 2 - (RIO_SIZE.h - RIO_SIZE.peakY) * k;
+    this.rio.setPosition(x, HORIZON + 2).setScale(k);
+    this.cristo.setPosition(x, peakY + 1).setScale(1.4 * k);
+    this.cristoGlow.setPosition(x, peakY - 24 * k).setScale(1.7 * k).setAlpha(0.42 + Math.sin(this.t * 1.6) * 0.06);
   }
 
   // ------------------------------------------------------------------ road rendering
