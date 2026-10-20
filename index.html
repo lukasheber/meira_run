@@ -142,22 +142,6 @@
   @keyframes breathe { 50% { transform: scale(1.045); } }
   #btn-play:active { animation: none; }
 
-  /* ranking */
-  .rank-card { width: calc(var(--u)*330); background: rgba(18,9,36,.62); border: 1px solid var(--line); border-radius: calc(var(--u)*16);
-    padding: calc(var(--u)*10) calc(var(--u)*12); text-align: left; }
-  .rank-h { display: flex; justify-content: space-between; align-items: baseline; font-size: calc(var(--u)*14); color: var(--muted);
-    text-transform: uppercase; letter-spacing: .06em; margin-bottom: calc(var(--u)*6); }
-  .rank-h .save { text-transform: none; letter-spacing: 0; font-size: calc(var(--u)*13); }
-  .save.ok { color: var(--green); } .save.err { color: #ff9a9a; }
-  ol.rank { list-style: none; margin: 0; padding: 0; }
-  ol.rank li { display: flex; align-items: center; gap: calc(var(--u)*8); padding: calc(var(--u)*4) calc(var(--u)*6); border-radius: calc(var(--u)*8); font-size: calc(var(--u)*17); }
-  ol.rank li .pos { width: calc(var(--u)*30); color: var(--muted); font-family: var(--num); font-size: calc(var(--u)*11); }
-  ol.rank li .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ol.rank li .pt { color: var(--yellow); font-family: var(--num); font-size: calc(var(--u)*12); }
-  ol.rank li.me { background: rgba(255,210,63,.14); box-shadow: inset 0 0 0 1px rgba(255,210,63,.35); }
-  ol.rank li.p1 .pos { color: var(--yellow); }
-  ol.rank li.empty { color: var(--muted); justify-content: center; font-size: calc(var(--u)*14); }
-
   /* help */
   ul.help { list-style: none; margin: 0 0 calc(var(--u)*12); padding: 0; text-align: left; }
   ul.help li { display: flex; gap: calc(var(--u)*12); align-items: center; padding: calc(var(--u)*7) 0; border-bottom: 1px solid rgba(255,255,255,.07); }
@@ -189,7 +173,8 @@
   .stat img { height: calc(var(--u)*24); }
   .stat .k { font-family: 'Pixelify Sans', monospace; font-size: calc(var(--u)*11); font-weight: 500; color: var(--muted); }
   .stat .dist { height: calc(var(--u)*24); display: grid; place-items: center; font-family: 'Pixelify Sans', monospace; font-size: calc(var(--u)*13); color: var(--muted); }
-  #scr-over .rank-card { width: 100%; margin-bottom: calc(var(--u)*14); }
+  .save { font-size: calc(var(--u)*14); color: var(--muted); margin-bottom: calc(var(--u)*14); min-height: 1.2em; }
+  .save.ok { color: var(--green); } .save.err { color: #ff9a9a; }
   .row-btns { display: flex; gap: calc(var(--u)*10); justify-content: center; align-items: center; }
   .row-btns .btn { white-space: nowrap; }
   .row-btns .btn:not(.ghost) { font-size: calc(var(--u)*21); padding: calc(var(--u)*12) calc(var(--u)*18); }
@@ -244,12 +229,11 @@
       <div class="tagline">Recicla. Carrega caixa. Foge do chefe.</div>
       <div class="title-mid">
         <div class="best-chip">Seu recorde: <b id="title-best">0</b></div>
-        <div id="title-rank" class="rank-card off"><div class="rank-h">Ranking do grupo</div><ol class="rank"></ol></div>
       </div>
       <div class="title-bottom">
         <button id="btn-play" class="btn">Correr!</button>
         <button id="btn-help" class="btn ghost">Como jogar</button>
-        <div id="offline-note" class="note off">Jogando fora do Telegram: a pontuação não vai pro ranking do grupo.</div>
+        <div id="offline-note" class="note off">Jogando fora do Telegram: a pontuação não vai pro grupo.</div>
       </div>
     </section>
 
@@ -304,7 +288,7 @@
           <div class="stat"><img class="px" src="assets/images/lata.png" alt=""><span id="st-lata">0</span><span class="k">lixeiras</span></div>
           <div class="stat"><img class="px" src="assets/images/coco.png" alt=""><span id="st-coco">0</span><span class="k">cocôs</span></div>
         </div>
-        <div class="rank-card"><div class="rank-h">Ranking do grupo <span id="save-status" class="save"></span></div><ol id="over-rank" class="rank"></ol></div>
+        <div id="save-status" class="save"></div>
         <div class="row-btns">
           <button id="btn-again" class="btn">Correr de novo</button>
           <button id="btn-share" class="btn ghost off">Compartilhar</button>
@@ -419,7 +403,6 @@ async function api(path, opts = {}) {
 const submitScore = score => api('/submit_score', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score, nonce: NONCE }),
 });
-const fetchLeaderboard = () => api('/leaderboard?nonce=' + encodeURIComponent(NONCE));
 
 // ======================================================================
 //  Tiny synth for extra sound effects (no extra files needed)
@@ -544,22 +527,7 @@ const UI = {
   },
   hideToast() { clearTimeout(this.toastTimer); $('toast').classList.add('off'); },
 
-  renderRank(ol, entries) {
-    ol.textContent = '';
-    if (!entries || !entries.length) {
-      const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Ninguém pontuou ainda'; ol.appendChild(li); return;
-    }
-    for (const e of entries.slice(0, 7)) {
-      const li = document.createElement('li');
-      if (e.is_me) li.classList.add('me');
-      if (e.position === 1) li.classList.add('p1');
-      const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = e.position + 'º';
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = e.name;
-      const pt = document.createElement('span'); pt.className = 'pt'; pt.textContent = fmt(e.score);
-      li.append(pos, nm, pt); ol.appendChild(li);
-    }
-  },
-  rankStatus(text, cls) { const el = $('save-status'); el.textContent = text; el.className = 'save ' + (cls || ''); },
+  saveStatus(text, cls) { const el = $('save-status'); el.textContent = text; el.className = 'save ' + (cls || ''); },
 
   showOver(r) {
     const d = DEATHS[r.cause] || DEATHS.taa;
@@ -570,9 +538,7 @@ const UI = {
     $('st-dist').textContent = fmt(r.dist);
     for (const k of ['delivered', 'jumped', 'tv', 'lata', 'coco']) $('st-' + k).textContent = fmt(r.stats[k]);
     $('btn-share').classList.toggle('off', !(window.TelegramGameProxy && NONCE));
-    $('over-rank').textContent = '';
-    this.rankStatus(NONCE ? 'salvando…' : 'fora do Telegram', NONCE ? '' : 'err');
-    if (!NONCE) this.renderRank($('over-rank'), [{ position: 1, name: 'Você (local)', score: Math.max(r.best, r.score), is_me: true }]);
+    this.saveStatus(NONCE ? 'Enviando pontuação…' : 'Fora do Telegram: pontuação não enviada', NONCE ? '' : 'err');
     $('title-best').textContent = fmt(Math.max(r.best, r.score));
     // count-up
     const el = $('over-score'), t0 = performance.now(), dur = 750;
@@ -662,7 +628,6 @@ class RunScene extends Phaser.Scene {
 
     UI.init(this);
     UI.show('title');
-    this.loadTitleRank();
     this.bindInput();
   }
 
@@ -1374,27 +1339,8 @@ class RunScene extends Phaser.Scene {
   async sendScore(score) {
     const r = await submitScore(score);
     if (this.state !== 'over') return;
-    if (r.ok) {
-      const lb = r.data && r.data.leaderboard;
-      UI.rankStatus('salvo ✓', 'ok');
-      if (lb && lb.length) UI.renderRank($('over-rank'), lb);
-      else this.refreshRank($('over-rank'));
-    } else {
-      const msg = r.status === 0 ? 'sem conexão' : r.status === 404 || r.status === 408 ? 'sessão expirou' : 'erro ao salvar';
-      UI.rankStatus(msg, 'err');
-    }
-  }
-
-  async refreshRank(ol) {
-    if (!NONCE) return false;
-    const r = await fetchLeaderboard();
-    const lb = r.ok && r.data && r.data.leaderboard;
-    if (lb && lb.length) { UI.renderRank(ol, lb); return true; }
-    return false;
-  }
-
-  async loadTitleRank() {
-    if (await this.refreshRank($('title-rank').querySelector('ol'))) $('title-rank').classList.remove('off');
+    if (r.ok) UI.saveStatus('Pontuação enviada pro grupo ✓', 'ok');
+    else UI.saveStatus(r.status === 0 ? 'Sem conexão: pontuação não enviada' : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram' : 'Erro ao enviar a pontuação', 'err');
   }
 
   // ------------------------------------------------------------------ fx helpers
