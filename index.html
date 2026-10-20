@@ -556,8 +556,8 @@ class RunScene extends Phaser.Scene {
 
   preload() {
     const img = 'assets/images/', au = 'assets/audio/';
-    this.load.spritesheet('player_run', img + 'player_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('bike_run', img + 'bike_run-sheet.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('player_run', img + 'player_run-sheet.png', { frameWidth: 72, frameHeight: 66 });
+    this.load.spritesheet('bike_run', img + 'bike_run-sheet.png', { frameWidth: 72, frameHeight: 66 });
     this.load.spritesheet('meira_attack', img + 'meira_attk.png', { frameWidth: 128, frameHeight: 128 });
     for (const k of ['velhinhos', 'taa', 'tv', 'coco', 'lata', 'bike', 'meira', 'coracao', 'box']) this.load.image(k, img + k + '.png');
     this.load.audio('theme', au + 'tema.ogg');
