@@ -1422,7 +1422,9 @@ class RunScene extends Phaser.Scene {
     const r = await submitScore(score);
     if (this.state !== 'over') return;
     if (r.ok) UI.saveStatus('Pontuação enviada pro grupo ✓', 'ok');
-    else UI.saveStatus(r.status === 0 ? (navigator.onLine === false ? 'Sem internet: pontuação não enviada' : 'Servidor de pontos não respondeu: pontuação não enviada') : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram' : 'Erro ao enviar a pontuação', 'err');
+    else UI.saveStatus(r.status === 0 ? (navigator.onLine === false ? 'Sem internet: pontuação não enviada' : 'Servidor de pontos não respondeu: pontuação não enviada') : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram'
+      : r.status === 400 && /game message/i.test((r.data && r.data.detail) || '') ? 'O Telegram recusou esta mensagem do jogo: mande /jogar no chat e jogue por ela'
+      : 'Erro ao enviar a pontuação', 'err');
   }
 
   // ------------------------------------------------------------------ fx helpers
