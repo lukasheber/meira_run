@@ -288,7 +288,7 @@
           <div id="over-best" class="best-line"></div>
         </div>
         <div class="stats">
-          <div class="stat"><span class="dist">metros rumo ao Rio</span><span id="st-dist">0</span></div>
+          <div class="stat"><span class="dist">metros</span><span id="st-dist">0</span><span class="k">rumo ao Rio</span></div>
           <div class="stat"><img class="px" src="assets/images/box.png" alt=""><span id="st-delivered">0</span><span class="k">caixas entregues</span></div>
           <div class="stat"><img class="px" src="assets/images/velhinhos.png" alt=""><span id="st-jumped">0</span><span class="k">velhinhos pulados</span></div>
           <div class="stat"><img class="px" src="assets/images/tv.png" alt=""><span id="st-tv">0</span><span class="k">TVs</span></div>
@@ -1423,7 +1423,7 @@ class RunScene extends Phaser.Scene {
     if (this.state !== 'over') return;
     if (r.ok) UI.saveStatus('Pontuação enviada pro grupo ✓', 'ok');
     else UI.saveStatus(r.status === 0 ? (navigator.onLine === false ? 'Sem internet: pontuação não enviada' : 'Servidor de pontos não respondeu: pontuação não enviada') : r.status === 404 || r.status === 408 ? 'Sessão expirou: abra o jogo de novo pelo Telegram'
-      : r.status === 400 && /game message/i.test((r.data && r.data.detail) || '') ? 'O Telegram recusou esta mensagem do jogo: mande /jogar no chat e jogue por ela'
+      : r.status === 400 && /game message/i.test((r.data && r.data.detail) || '') ? 'Pontuação não salva. Adicione o @botbotarti_bot ao grupo e mande /jogar pra entrar no ranking.'
       : 'Erro ao enviar a pontuação', 'err');
   }
 
